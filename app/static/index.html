@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="BOUNDARY — crash-safe recovery for uncertain AI actions.">
+  <title>BOUNDARY Recovery Agent</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #06110f;
+      --panel: rgba(13, 29, 26, .78);
+      --panel-solid: #0d1d1a;
+      --line: rgba(151, 255, 220, .14);
+      --muted: #96aaa4;
+      --text: #f2fff9;
+      --mint: #69f7bf;
+      --cyan: #65dff5;
+      --amber: #ffcc6f;
+      --red: #ff7689;
+      --shadow: 0 24px 70px rgba(0,0,0,.35);
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 15% 0%, rgba(39, 224, 164, .17), transparent 32rem),
+        radial-gradient(circle at 90% 18%, rgba(57, 191, 255, .12), transparent 30rem),
+        linear-gradient(180deg, #071310 0%, #050b0a 100%);
+    }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: .18;
+      background-image: linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
+                        linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px);
+      background-size: 34px 34px;
+      mask-image: linear-gradient(to bottom, black, transparent 75%);
+    }
+    a { color: inherit; }
+    button, input, select { font: inherit; }
+    .shell { width: min(1180px, calc(100% - 36px)); margin: 0 auto; }
+    .topbar {
+      position: sticky; top: 0; z-index: 20;
+      backdrop-filter: blur(18px);
+      background: rgba(5, 12, 10, .75);
+      border-bottom: 1px solid var(--line);
+    }
+    .nav { min-height: 70px; display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+    .brand { display: flex; align-items: center; gap: 12px; font-weight: 900; letter-spacing: .13em; }
+    .brand-mark {
+      width: 35px; height: 35px; display: grid; place-items: center;
+      border: 1px solid rgba(105,247,191,.45); border-radius: 11px;
+      color: #04110d; background: var(--mint); box-shadow: 0 0 28px rgba(105,247,191,.2);
+    }
+    .brand small { display: block; margin-top: 2px; color: var(--muted); font-size: 9px; letter-spacing: .23em; font-weight: 700; }
+    .nav-actions { display: flex; align-items: center; gap: 12px; }
+    .health, .phase-pill {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 8px 11px; border: 1px solid var(--line); border-radius: 999px;
+      color: var(--muted); background: rgba(255,255,255,.025); font-size: 12px; font-weight: 700;
+    }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--amber); box-shadow: 0 0 12px currentColor; }
+    .health.ok .dot { background: var(--mint); }
+    .health.bad .dot { background: var(--red); }
+    .docs { color: var(--muted); text-decoration: none; font-size: 13px; }
+    .hero { padding: 82px 0 48px; display: grid; grid-template-columns: 1.35fr .65fr; gap: 45px; align-items: end; }
+    .eyebrow { color: var(--mint); text-transform: uppercase; letter-spacing: .18em; font-size: 12px; font-weight: 800; }
+    h1 { margin: 16px 0 20px; max-width: 850px; font-size: clamp(42px, 6.4vw, 78px); line-height: .98; letter-spacing: -.055em; }
+    .hero-copy { max-width: 720px; color: var(--muted); font-size: 18px; line-height: 1.7; }
+    .hero-note { border-left: 1px solid rgba(105,247,191,.5); padding: 3px 0 3px 22px; color: #cde5dc; line-height: 1.6; }
+    .hero-note strong { display: block; color: var(--mint); font-size: 29px; letter-spacing: -.04em; }
+    .signal-row { padding: 0 0 54px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .signal {
+      padding: 16px 18px; border: 1px solid var(--line); border-radius: 16px;
+      background: rgba(255,255,255,.025); color: var(--muted); font-size: 13px;
+    }
+    .signal b { color: var(--text); margin-right: 6px; }
+    .section-head { margin: 0 0 20px; display: flex; justify-content: space-between; align-items: end; gap: 16px; }
+    .section-head h2 { margin: 6px 0 0; font-size: clamp(26px, 3.4vw, 40px); letter-spacing: -.04em; }
+    .section-head p { max-width: 520px; margin: 0; color: var(--muted); line-height: 1.55; }
+    .grid { display: grid; grid-template-columns: .82fr 1.18fr; gap: 18px; align-items: stretch; }
+    .card {
+      position: relative; overflow: hidden; border: 1px solid var(--line); border-radius: 24px;
+      background: linear-gradient(150deg, rgba(20, 45, 39, .9), rgba(7, 20, 17, .9));
+      box-shadow: var(--shadow);
+    }
+    .card::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(130deg, rgba(105,247,191,.045), transparent 42%); }
+    .card-inner { position: relative; z-index: 1; padding: 26px; }
+    .card-kicker { color: var(--muted); text-transform: uppercase; letter-spacing: .15em; font-size: 10px; font-weight: 800; }
+    .card h3 { margin: 8px 0 7px; font-size: 24px; letter-spacing: -.03em; }
+    .card-sub { margin: 0 0 24px; color: var(--muted); line-height: 1.55; font-size: 14px; }
+    label { display: block; margin: 15px 0 7px; color: #bed1ca; font-size: 12px; font-weight: 700; }
+    .field {
+      width: 100%; padding: 13px 14px; color: var(--text);
+      border: 1px solid var(--line); border-radius: 12px; outline: none; background: rgba(0,0,0,.18);
+    }
+    .field:focus { border-color: rgba(105,247,191,.55); box-shadow: 0 0 0 3px rgba(105,247,191,.08); }
+    .order-box { display: flex; align-items: center; justify-content: space-between; padding: 13px 14px; border: 1px solid var(--line); border-radius: 12px; background: rgba(0,0,0,.16); }
+    .order-box span { color: var(--muted); font-size: 12px; }
+    .check { display: flex; align-items: center; gap: 10px; margin: 16px 0; color: var(--muted); font-size: 13px; }
+    .check input { accent-color: var(--mint); width: 16px; height: 16px; }
+    .actions { display: grid; gap: 10px; margin-top: 20px; }
+    .action-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .btn {
+      border: 0; border-radius: 13px; padding: 13px 15px; cursor: pointer;
+      font-weight: 850; transition: transform .18s ease, opacity .18s ease, border-color .18s ease;
+    }
+    .btn:hover:not(:disabled) { transform: translateY(-1px); }
+    .btn:disabled { cursor: not-allowed; opacity: .42; }
+    .btn-primary { color: #04110d; background: linear-gradient(120deg, var(--mint), #a8ffd9); }
+    .btn-recover { color: #031015; background: linear-gradient(120deg, var(--cyan), #baf5ff); }
+    .btn-ghost { color: var(--muted); border: 1px solid var(--line); background: rgba(255,255,255,.025); }
+    .notice { min-height: 38px; margin-top: 13px; padding: 10px 12px; border-radius: 11px; color: var(--muted); background: rgba(0,0,0,.15); font-size: 12px; line-height: 1.45; }
+    .notice.error { color: #ffd5dc; border: 1px solid rgba(255,118,137,.3); }
+    .state-head { display: flex; align-items: start; justify-content: space-between; gap: 15px; }
+    .phase-pill { color: var(--mint); border-color: rgba(105,247,191,.3); }
+    .flow { display: grid; grid-template-columns: repeat(5, 1fr); gap: 7px; margin: 22px 0 18px; }
+    .step { position: relative; padding: 13px 8px; text-align: center; color: #69817a; border: 1px solid var(--line); border-radius: 12px; font-size: 11px; font-weight: 800; }
+    .step.active { color: var(--text); border-color: rgba(105,247,191,.5); background: rgba(105,247,191,.09); }
+    .step.done { color: var(--mint); background: rgba(105,247,191,.04); }
+    .reasoner {
+      margin: 0 0 18px; padding: 17px; border: 1px solid rgba(101,223,245,.22);
+      border-radius: 17px; background: rgba(101,223,245,.045);
+    }
+    .reasoner-head { display: flex; justify-content: space-between; gap: 14px; align-items: start; }
+    .reasoner-head small, .reasoner-item span, .evidence-strip > span {
+      display: block; color: var(--muted); font-size: 10px; font-weight: 800;
+      letter-spacing: .12em; text-transform: uppercase;
+    }
+    .reasoner-head strong { display: block; margin-top: 5px; font-size: 17px; }
+    .confidence, .gate {
+      display: inline-flex; padding: 6px 9px; border: 1px solid var(--line);
+      border-radius: 999px; color: var(--muted); font-size: 10px; letter-spacing: .08em;
+    }
+    .confidence.high { color: var(--mint); border-color: rgba(105,247,191,.35); background: rgba(105,247,191,.07); }
+    .reasoner-grid { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 10px; margin-top: 15px; }
+    .reasoner-item { padding: 13px; border: 1px solid var(--line); border-radius: 12px; background: rgba(0,0,0,.13); }
+    .reasoner-item b { display: block; margin-top: 8px; font-size: 13px; }
+    .reasoner-item p { margin: 6px 0 0; color: var(--muted); font-size: 11px; line-height: 1.45; }
+    .gate.lookup-only { color: var(--amber); border-color: rgba(255,204,111,.35); background: rgba(255,204,111,.07); }
+    .gate.verified { color: var(--mint); border-color: rgba(105,247,191,.35); background: rgba(105,247,191,.07); }
+    .evidence-strip { margin-top: 12px; }
+    .evidence-strip ul { display: flex; flex-wrap: wrap; gap: 7px; margin: 8px 0 0; padding: 0; list-style: none; }
+    .evidence-strip li {
+      padding: 6px 8px; border-radius: 8px; color: #c6dcd5;
+      background: rgba(255,255,255,.04); font-family: "Cascadia Code", Consolas, monospace; font-size: 10px;
+    }
+    .reality { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .reality-box { min-height: 122px; padding: 17px; border: 1px solid var(--line); border-radius: 17px; background: rgba(0,0,0,.16); }
+    .reality-box small { color: var(--muted); text-transform: uppercase; letter-spacing: .13em; font-weight: 800; }
+    .reality-box strong { display: block; margin: 16px 0 7px; font-size: 19px; }
+    .reality-box p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
+    .run-meta { margin-top: 13px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .meta { padding: 12px; border-radius: 12px; border: 1px solid var(--line); background: rgba(255,255,255,.02); }
+    .meta span { display: block; color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .12em; }
+    .meta b { display: block; margin-top: 5px; font-size: 12px; word-break: break-all; }
+    .proof-section, .timeline-section { padding: 72px 0 0; }
+    .metrics { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; }
+    .metric { min-height: 112px; padding: 17px; border: 1px solid var(--line); border-radius: 17px; background: rgba(255,255,255,.025); }
+    .metric span { color: var(--muted); font-size: 10px; line-height: 1.35; text-transform: uppercase; letter-spacing: .08em; font-weight: 800; }
+    .metric b { display: block; margin-top: 17px; font-size: 25px; }
+    .metric.good b { color: var(--mint); }
+    .certificate { margin-top: 16px; display: grid; grid-template-columns: .75fr 1.25fr; border: 1px solid var(--line); border-radius: 23px; overflow: hidden; background: var(--panel); }
+    .verdict { padding: 26px; display: flex; flex-direction: column; justify-content: space-between; border-right: 1px solid var(--line); }
+    .verdict-badge { display: inline-flex; align-self: flex-start; padding: 8px 11px; border-radius: 999px; color: var(--muted); border: 1px solid var(--line); font-size: 11px; font-weight: 900; letter-spacing: .12em; }
+    .verdict-badge.passed { color: #052117; background: var(--mint); border-color: var(--mint); }
+    .verdict h3 { margin: 28px 0 8px; font-size: 27px; letter-spacing: -.04em; }
+    .verdict p { margin: 0; color: var(--muted); line-height: 1.55; }
+    .hashes { padding: 26px; display: grid; gap: 17px; }
+    .hash label { margin: 0 0 7px; }
+    .hash code { display: block; padding: 13px; color: #bcecdc; border: 1px solid var(--line); border-radius: 11px; background: rgba(0,0,0,.2); word-break: break-all; font-size: 11px; line-height: 1.55; }
+    .timeline { position: relative; display: grid; gap: 11px; }
+    .event { display: grid; grid-template-columns: 148px 1fr; gap: 18px; padding: 17px 19px; border: 1px solid var(--line); border-radius: 16px; background: rgba(255,255,255,.022); }
+    .event b { color: var(--mint); font-size: 11px; letter-spacing: .08em; }
+    .event p { margin: 0; color: #c0d4cd; line-height: 1.5; font-size: 13px; }
+    footer { padding: 60px 0 28px; color: #60736d; display: flex; justify-content: space-between; gap: 20px; font-size: 12px; }
+    @media (max-width: 920px) {
+      .hero, .grid { grid-template-columns: 1fr; }
+      .hero { padding-top: 58px; }
+      .hero-note { max-width: 420px; }
+      .metrics { grid-template-columns: repeat(4, 1fr); }
+    }
+    @media (max-width: 650px) {
+      .shell { width: min(100% - 24px, 1180px); }
+      .nav { min-height: 62px; }
+      .brand span:last-child, .docs { display: none; }
+      .hero { padding: 48px 0 36px; }
+      h1 { font-size: 45px; }
+      .hero-copy { font-size: 16px; }
+      .signal-row, .reality, .run-meta, .certificate, .reasoner-grid { grid-template-columns: 1fr; }
+      .signal-row { padding-bottom: 38px; }
+      .metrics { grid-template-columns: repeat(2, 1fr); }
+      .flow { grid-template-columns: 1fr 1fr; }
+      .verdict { border-right: 0; border-bottom: 1px solid var(--line); }
+      .event { grid-template-columns: 1fr; gap: 6px; }
+      footer { flex-direction: column; }
+    }
+  </style>
+</head>
+<body id="boundary-dashboard">
+  <header class="topbar">
+    <div class="shell nav">
+      <div class="brand">
+        <span class="brand-mark">B</span>
+        <span>BOUNDARY<small>RECOVERY AGENT</small></span>
+      </div>
+      <div class="nav-actions">
+        <span id="healthChip" class="health"><i class="dot"></i><span>Checking API</span></span>
+        <a class="docs" href="/docs" target="_blank" rel="noreferrer">API docs ↗</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="shell">
+    <section class="hero">
+      <div>
+        <div class="eyebrow">HUMAIN Challenge 1 · Agentic Recovery</div>
+        <h1>Recover uncertain AI actions without replaying them.</h1>
+        <p class="hero-copy">BOUNDARY gives an interrupted AI agent a safe recovery boundary. It persists intent, reconciles with authoritative provider evidence, and resumes only when the outcome is proven.</p>
+      </div>
+      <div class="hero-note"><strong>One action.</strong> Even when the acknowledgement disappears.</div>
+    </section>
+
+    <section class="signal-row" aria-label="Safety guarantees">
+      <div class="signal"><b>Persist first</b> Identity and payload are durable before dispatch.</div>
+      <div class="signal"><b>Reconcile</b> Recovery queries evidence instead of guessing.</div>
+      <div class="signal"><b>Fail closed</b> Unverified outcomes never trigger blind replay.</div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <div><div class="eyebrow">Live recovery lab</div><h2>Make the failure visible.</h2></div>
+        <p>The demo deliberately loses the provider acknowledgement after commit, creating a dangerous unknown outcome for the agent.</p>
+      </div>
+
+      <div class="grid">
+        <article class="card">
+          <div class="card-inner">
+            <div class="card-kicker">Scenario controls</div>
+            <h3>Order reschedule</h3>
+            <p class="card-sub">Choose a real failure boundary. The agent must diagnose from evidence before it can act.</p>
+
+            <label for="scenarioSelect">Failure scenario</label>
+            <select id="scenarioSelect" class="field">
+              <option value="ack_lost">ACK lost after provider commit</option>
+              <option value="no_commit">Request lost before provider commit</option>
+              <option value="provider_unavailable">Provider unavailable during recovery</option>
+              <option value="receipt_conflict">Conflicting / tampered receipt</option>
+              <option value="compound">Compound: ACK loss plus temporary outage</option>
+            </select>
+
+            <label>Order</label>
+            <div class="order-box"><b>#731</b><span>Current: Thursday 09:00 · v12</span></div>
+
+            <label for="scheduledFor">Requested schedule</label>
+            <input id="scheduledFor" class="field" value="Friday 10:00" autocomplete="off">
+
+            <label class="check"><input id="notifySupplier" type="checkbox"> Notify supplier in the same protected operation</label>
+
+            <div class="actions">
+              <button id="runButton" class="btn btn-primary">Run selected failure</button>
+              <div class="action-row">
+                <button id="recoverButton" class="btn btn-recover" disabled>Recover safely</button>
+                <button id="resetButton" class="btn btn-ghost">Reset demo</button>
+              </div>
+            </div>
+            <div id="notice" class="notice" aria-live="polite">Ready. The provider baseline is untouched.</div>
+          </div>
+        </article>
+
+        <article class="card">
+          <div class="card-inner">
+            <div class="state-head">
+              <div><div class="card-kicker">System state</div><h3 id="stateTitle">Ready for incident</h3></div>
+              <span id="phasePill" class="phase-pill">IDLE</span>
+            </div>
+
+            <div class="flow" aria-label="Agent reasoning flow">
+              <div id="stageObserve" class="step">01 · Observe</div>
+              <div id="stageDiagnose" class="step">02 · Diagnose</div>
+              <div id="stagePlan" class="step">03 · Plan</div>
+              <div id="stageAct" class="step">04 · Act</div>
+              <div id="stageVerify" class="step">05 · Verify</div>
+            </div>
+
+            <section class="reasoner" aria-labelledby="reasonerTitle">
+              <div class="reasoner-head">
+                <div><small>Incident reasoner</small><strong id="reasonerTitle">Waiting for evidence</strong></div>
+                <span id="confidenceBadge" class="confidence">—</span>
+              </div>
+              <div class="reasoner-grid">
+                <div class="reasoner-item">
+                  <span>Diagnosis</span><b id="diagnosis">No incident observed</b>
+                  <p id="diagnosisSummary">Start a scenario to collect authoritative evidence.</p>
+                </div>
+                <div class="reasoner-item">
+                  <span>Selected strategy</span><b id="strategy">—</b>
+                  <p id="strategyReason">No recovery strategy selected.</p>
+                </div>
+                <div class="reasoner-item">
+                  <span>Safety gate</span><b id="safetyGate" class="gate">WAITING</b>
+                  <p id="safetyReason">Mutation permissions have not been evaluated.</p>
+                </div>
+              </div>
+              <div class="evidence-strip">
+                <span>Decisive evidence</span>
+                <ul id="diagnosisEvidence"><li>Waiting for incident data</li></ul>
+              </div>
+            </section>
+
+            <div class="reality">
+              <div class="reality-box">
+                <small>Agent knowledge</small>
+                <strong id="agentKnowledge">NOT STARTED</strong>
+                <p id="agentDetail">No request has been dispatched.</p>
+              </div>
+              <div class="reality-box">
+                <small>Provider reality</small>
+                <strong id="providerReality">ORDER v12</strong>
+                <p id="providerDetail">Order 731 is scheduled for Thursday 09:00.</p>
+              </div>
+            </div>
+
+            <div class="run-meta">
+              <div class="meta"><span>Run ID</span><b id="runId">—</b></div>
+              <div class="meta"><span>Connection</span><b id="connection">CONNECTED</b></div>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="proof-section">
+      <div class="section-head">
+        <div><div class="eyebrow">Machine-checkable proof</div><h2>Safety, measured.</h2></div>
+        <p>The certificate is generated from the SQLite evidence trail—not from a model’s explanation.</p>
+      </div>
+
+      <div class="metrics">
+        <div class="metric"><span>Mutation requests</span><b id="metricRequests">0</b></div>
+        <div class="metric"><span>Provider commits</span><b id="metricCommits">0</b></div>
+        <div class="metric"><span>Semantic effects</span><b id="metricEffects">0</b></div>
+        <div class="metric good"><span>Duplicate effects</span><b id="metricDuplicates">0</b></div>
+        <div class="metric"><span>Version delta</span><b id="metricVersion">0</b></div>
+        <div class="metric good"><span>Recovery mutations</span><b id="metricRecovery">0</b></div>
+        <div class="metric"><span>Receipt hash match</span><b id="metricHash">—</b></div>
+      </div>
+
+      <div class="certificate">
+        <div class="verdict">
+          <div><span id="verdictBadge" class="verdict-badge">AWAITING PROOF</span><h3 id="verdictTitle">No claim yet</h3></div>
+          <p id="verdictClaim">Run the incident, then recover it to generate an auditable safety certificate.</p>
+        </div>
+        <div class="hashes">
+          <div class="hash"><label>Idempotency key</label><code id="idempotencyKey">—</code></div>
+          <div class="hash"><label>Proof hash</label><code id="proofHash">—</code></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="timeline-section">
+      <div class="section-head">
+        <div><div class="eyebrow">Evidence trail</div><h2>What actually happened.</h2></div>
+        <p>Every state transition is written to the local evidence store and returned by the API.</p>
+      </div>
+      <div id="timeline" class="timeline">
+        <div class="event"><b>WAITING</b><p>Start the scenario to create the first durable event.</p></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="shell">
+    <span>BOUNDARY MVP · Simulated provider · SQLite evidence store</span>
+    <span>Built for HUMAIN — Agentic Recovery of a Failing System</span>
+  </footer>
+
+  <script>
+    (function () {
+      "use strict";
+
+      var currentRunId = null;
+      var busy = false;
+      var byId = function (id) { return document.getElementById(id); };
+
+      var elements = {
+        health: byId("healthChip"),
+        run: byId("runButton"),
+        recover: byId("recoverButton"),
+        reset: byId("resetButton"),
+        notice: byId("notice"),
+        schedule: byId("scheduledFor"),
+        notify: byId("notifySupplier"),
+        scenario: byId("scenarioSelect")
+      };
+
+      function text(id, value) {
+        byId(id).textContent = value === null || value === undefined || value === "" ? "—" : String(value);
+      }
+
+      function setNotice(message, isError) {
+        elements.notice.textContent = message;
+        elements.notice.classList.toggle("error", Boolean(isError));
+      }
+
+      function setBusy(value) {
+        busy = value;
+        elements.run.disabled = value;
+        elements.reset.disabled = value;
+        if (value) {
+          elements.recover.disabled = true;
+        }
+      }
+
+      async function request(path, options, allowedStatuses) {
+        var response = await fetch(path, options || {});
+        var data;
+        try {
+          data = await response.json();
+        } catch (error) {
+          data = { detail: "The API returned an unreadable response." };
+        }
+        var allowed = allowedStatuses || [];
+        if (!response.ok && allowed.indexOf(response.status) === -1) {
+          var message = data.detail || data.code || "Request failed with status " + response.status;
+          throw new Error(message);
+        }
+        return { response: response, data: data };
+      }
+
+      function renderReasoner(snapshot) {
+        var ids = ["stageObserve", "stageDiagnose", "stagePlan", "stageAct", "stageVerify"];
+        ids.forEach(function (id) { byId(id).classList.remove("done", "active"); });
+
+        if (!snapshot || !snapshot.latest_reasoning) {
+          text("reasonerTitle", snapshot ? "Incident detected" : "Waiting for evidence");
+          text("confidenceBadge", "—");
+          byId("confidenceBadge").classList.remove("high");
+          text("diagnosis", snapshot ? "Evidence not analyzed yet" : "No incident observed");
+          text("diagnosisSummary", snapshot ? "Select Recover safely to start autonomous diagnosis." : "Start a scenario to collect authoritative evidence.");
+          text("strategy", "—");
+          text("strategyReason", "No recovery strategy selected.");
+          text("safetyGate", snapshot ? "MUTATION BLOCKED" : "WAITING");
+          text("safetyReason", snapshot ? "Unknown outcomes cannot be replayed blindly." : "Mutation permissions have not been evaluated.");
+          byId("safetyGate").className = "gate";
+          renderEvidence(snapshot ? ["durable intent saved", "local outcome unknown"] : ["Waiting for incident data"]);
+          if (snapshot && snapshot.run.phase === "INCIDENT") byId("stageObserve").classList.add("active");
+          return;
+        }
+
+        var reasoning = snapshot.latest_reasoning;
+        var diagnosisData = reasoning.diagnosis || {};
+        var policy = reasoning.policy || {};
+        var strategyLabels = {
+          RECONCILE_RECEIPT: "Reconcile authoritative receipt",
+          RETRY_SAME_KEY: "Retry once with original key",
+          WAIT_AND_REOBSERVE: "Wait and observe again",
+          QUARANTINE_AND_ESCALATE: "Quarantine and escalate",
+          FREEZE_AND_ESCALATE: "Freeze effects and escalate"
+        };
+        var diagnosisLabels = {
+          COMMITTED_ACK_LOST: "Commit succeeded; acknowledgement was lost",
+          NOT_COMMITTED_REQUEST_LOST: "Request never reached the provider",
+          PROVIDER_UNAVAILABLE: "Provider evidence is temporarily unavailable",
+          RECEIPT_CONFLICT_OR_TAMPERED: "Receipt integrity conflict detected",
+          DUPLICATE_OR_PARTIAL_EFFECT: "Duplicate or partial effect detected"
+        };
+
+        text("reasonerTitle", "Autonomous recovery trace");
+        text("confidenceBadge", Math.round((diagnosisData.confidence || 0) * 100) + "% CONFIDENCE");
+        byId("confidenceBadge").classList.toggle("high", (diagnosisData.confidence || 0) >= .75);
+        text("diagnosis", diagnosisLabels[diagnosisData.top_hypothesis] || diagnosisData.top_hypothesis);
+        text("diagnosisSummary", "Runner-up: " + (diagnosisData.runner_up || "none") + " · margin " + Math.round((diagnosisData.margin || 0) * 100) + "%.");
+        text("strategy", strategyLabels[reasoning.strategy] || reasoning.strategy);
+        text("strategyReason", reasoning.tool_result && reasoning.tool_result.status ? "Tool result: " + reasoning.tool_result.status.replaceAll("_", " ") + "." : "Strategy selected from the diagnosis.");
+        text("safetyGate", policy.decision || "BLOCKED");
+        text("safetyReason", policy.reason || "No external mutation is permitted.");
+        byId("safetyGate").className = "gate" + (policy.decision === "LOOKUP_ONLY" || policy.decision === "WAIT_ONLY" ? " lookup-only" : "") + (snapshot.run.phase === "VERIFIED" ? " verified" : "");
+        renderEvidence(diagnosisData.decisive_evidence || []);
+
+        ["stageObserve", "stageDiagnose", "stagePlan", "stageAct"].forEach(function (id) { byId(id).classList.add("done"); });
+        if (snapshot.run.phase === "VERIFIED" || snapshot.run.phase === "BLOCKED") {
+          byId("stageVerify").classList.add("done");
+        } else {
+          byId("stageVerify").classList.add("active");
+        }
+      }
+
+      function renderEvidence(evidence) {
+        var list = byId("diagnosisEvidence");
+        list.replaceChildren();
+        (evidence.length ? evidence : ["No decisive evidence"]).forEach(function (item) {
+          var node = document.createElement("li");
+          node.textContent = item;
+          list.appendChild(node);
+        });
+      }
+
+      function renderIdle(provider) {
+        currentRunId = null;
+        text("phasePill", "IDLE");
+        text("stateTitle", "Ready for incident");
+        text("agentKnowledge", "NOT STARTED");
+        text("agentDetail", "No request has been dispatched.");
+        text("providerReality", "ORDER v" + (provider.version || 12));
+        text("providerDetail", "Order 731 is scheduled for " + (provider.scheduled_for || "Thursday 09:00") + ".");
+        text("runId", "—");
+        text("connection", "CONNECTED");
+        ["metricRequests", "metricCommits", "metricEffects", "metricDuplicates", "metricVersion", "metricRecovery"].forEach(function (id) { text(id, 0); });
+        text("metricHash", "—");
+        text("idempotencyKey", "—");
+        text("proofHash", "—");
+        text("verdictBadge", "AWAITING PROOF");
+        byId("verdictBadge").classList.remove("passed");
+        text("verdictTitle", "No claim yet");
+        text("verdictClaim", "Run the incident, then recover it to generate an auditable safety certificate.");
+        byId("timeline").innerHTML = '<div class="event"><b>WAITING</b><p>Start the scenario to create the first durable event.</p></div>';
+        elements.recover.disabled = true;
+        renderReasoner(null);
+      }
+
+      function renderSnapshot(snapshot) {
+        var run = snapshot.run;
+        var provider = snapshot.provider || {};
+        var order = provider.order || {};
+        var effects = provider.effects || [];
+        var proof = snapshot.proof;
+        currentRunId = run.id;
+        renderReasoner(snapshot);
+
+        text("phasePill", run.phase);
+        text("runId", run.id);
+        text("connection", run.connection);
+        text("stateTitle", run.phase === "VERIFIED" ? "Recovery verified" : run.phase === "BLOCKED" ? "Automation blocked safely" : run.phase === "INCIDENT" ? "Unknown outcome detected" : "Operation prepared");
+
+        if (run.phase === "INCIDENT") {
+          text("agentKnowledge", "OUTCOME UNKNOWN");
+          text("agentDetail", "The receipt was lost. Replaying now could duplicate the external action.");
+        } else if (run.phase === "VERIFIED") {
+          text("agentKnowledge", "COMMIT VERIFIED");
+          text("agentDetail", "Authoritative receipt reconciled. No mutation was replayed.");
+        } else if (run.phase === "BLOCKED") {
+          text("agentKnowledge", "SAFE ESCALATION");
+          text("agentDetail", "The safety gate rejected automation. No blind mutation was sent.");
+        } else {
+          text("agentKnowledge", run.effect_status);
+          text("agentDetail", "The request is persisted under a stable operation identity.");
+        }
+
+        text("providerReality", effects.length ? "COMMITTED · v" + order.version : "ORDER v" + order.version);
+        text("providerDetail", "Order " + order.order_id + " is scheduled for " + order.scheduled_for + ".");
+        text("metricRequests", run.provider_mutation_requests);
+        text("metricCommits", run.provider_commits);
+        text("metricEffects", proof ? proof.semantic_effect_count : effects.length);
+        text("metricDuplicates", proof ? proof.duplicate_effects : Math.max(0, effects.length - 1));
+        text("metricVersion", proof ? "+" + proof.version_delta : order.version - run.order_version_before);
+        text("metricRecovery", run.recovery_mutation_calls);
+        text("metricHash", proof ? (proof.receipt_payload_hash_matches ? "TRUE" : "FALSE") : "—");
+        text("idempotencyKey", run.idempotency_key);
+        text("proofHash", proof ? proof.proof_hash : "Pending recovery");
+
+        if (proof) {
+          text("verdictBadge", proof.verdict);
+          byId("verdictBadge").classList.toggle("passed", proof.verdict === "PASSED");
+          text("verdictTitle", proof.verdict === "PASSED" ? "Exactly-once effect proven" : "Proof checks failed");
+          text("verdictClaim", proof.claim);
+        } else {
+          text("verdictBadge", run.phase === "INCIDENT" ? "INCIDENT RECORDED" : "AWAITING PROOF");
+          byId("verdictBadge").classList.remove("passed");
+          text("verdictTitle", run.phase === "INCIDENT" ? "Provider committed; agent does not know" : "No claim yet");
+          text("verdictClaim", run.phase === "INCIDENT" ? "Recovery must query the original idempotency key before any action can resume." : "The operation has not reached a recoverable incident.");
+        }
+
+        var timeline = snapshot.timeline || [];
+        byId("timeline").innerHTML = timeline.length ? timeline.map(function (event) {
+          return '<div class="event"><b>' + escapeHtml(event.event_type) + '</b><p>' + escapeHtml(event.detail) + '</p></div>';
+        }).join("") : '<div class="event"><b>WAITING</b><p>No events recorded.</p></div>';
+
+        elements.recover.disabled = busy || run.phase !== "INCIDENT";
+      }
+
+      function escapeHtml(value) {
+        return String(value).replace(/[&<>"']/g, function (character) {
+          return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[character];
+        });
+      }
+
+      async function refreshHealth() {
+        try {
+          await request("/health");
+          elements.health.className = "health ok";
+          elements.health.innerHTML = '<i class="dot"></i><span>API healthy</span>';
+        } catch (error) {
+          elements.health.className = "health bad";
+          elements.health.innerHTML = '<i class="dot"></i><span>API unavailable</span>';
+        }
+      }
+
+      async function runScenario() {
+        if (busy) return;
+        setBusy(true);
+        setNotice("Resetting the evidence store and persisting a new protected operation…", false);
+        try {
+          await request("/api/demo/reset", { method: "POST" });
+          var created = await request("/api/runs", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              scenario: elements.scenario.value,
+              order_id: "731",
+              scheduled_for: elements.schedule.value.trim() || "Friday 10:00",
+              notify_supplier: elements.notify.checked
+            })
+          });
+          renderSnapshot(created.data);
+          setNotice("Operation persisted. Injecting the selected failure at the provider boundary…", false);
+          var execution = await request("/api/runs/" + currentRunId + "/execute", { method: "POST" }, [503]);
+          var snapshot = await request("/api/runs/" + currentRunId);
+          renderSnapshot(snapshot.data);
+          setNotice("Incident created. Provider reality: " + execution.data.provider_reality + ". The agent must diagnose before acting.", false);
+        } catch (error) {
+          setNotice(error.message, true);
+        } finally {
+          setBusy(false);
+          if (currentRunId) {
+            elements.recover.disabled = byId("phasePill").textContent !== "INCIDENT";
+          }
+        }
+      }
+
+      async function recoverScenario() {
+        if (busy || !currentRunId) return;
+        setBusy(true);
+        setNotice("Reconciling with the provider by the original idempotency key…", false);
+        try {
+          var recovered = await request("/api/runs/" + currentRunId + "/recover", { method: "POST" });
+          renderSnapshot(recovered.data);
+          if (recovered.data.run.phase === "VERIFIED") {
+            setNotice(recovered.data.run.recovery_mutation_calls ? "Verified: authoritative absence allowed one same-key retry and exactly one effect." : "Verified: authoritative evidence was reconciled without repeating the mutation.", false);
+          } else {
+            setNotice("Safe escalation: evidence was unavailable or unsafe, so BOUNDARY blocked all mutations.", false);
+          }
+        } catch (error) {
+          setNotice(error.message, true);
+        } finally {
+          setBusy(false);
+          elements.recover.disabled = true;
+        }
+      }
+
+      async function resetScenario() {
+        if (busy) return;
+        setBusy(true);
+        setNotice("Resetting the local demo…", false);
+        try {
+          var result = await request("/api/demo/reset", { method: "POST" });
+          renderIdle(result.data.provider_order || {});
+          setNotice("Reset complete. The provider is back to order 731, Thursday 09:00, version 12.", false);
+        } catch (error) {
+          setNotice(error.message, true);
+        } finally {
+          setBusy(false);
+        }
+      }
+
+      elements.run.addEventListener("click", runScenario);
+      elements.recover.addEventListener("click", recoverScenario);
+      elements.reset.addEventListener("click", resetScenario);
+      renderIdle({ order_id: "731", scheduled_for: "Thursday 09:00", version: 12 });
+      refreshHealth();
+    }());
+  </script>
+</body>
+</html>

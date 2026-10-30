@@ -65,3 +65,20 @@ def test_repeated_recovery_is_idempotent() -> None:
     assert proof["provider_commits"] == 1
     assert proof["semantic_effect_count"] == 1
     assert proof["duplicate_effects"] == 0
+
+def test_dashboard_is_served() -> None:
+    response = client.get("/")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+    assert 'id="boundary-dashboard"' in response.text
+    assert "BOUNDARY" in response.text
+
+
+def test_api_overview_remains_available_as_json() -> None:
+    response = client.get("/api")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/json")
+    data = response.json()
+    assert data["project"] == "BOUNDARY Recovery Agent"
+    assert data["dashboard"] == "/"
+    assert data["docs"] == "/docs"
