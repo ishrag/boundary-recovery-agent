@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import sqlite3
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -16,9 +17,13 @@ from app.diagnosis import diagnose, model_card
 
 
 APP_DIR = Path(__file__).resolve().parent
-DB_PATH = APP_DIR.parent / "boundary.db"
+DB_PATH = Path(
+    os.getenv("BOUNDARY_DB_PATH", str(APP_DIR.parent / "boundary.db"))
+)
 DASHBOARD_PATH = APP_DIR / "static" / "index.html"
 PROVIDER_SOURCE = "mock-order-service"
+PROCESS_INSTANCE_ID = uuid.uuid4().hex
+RECOVERY_LEASE_SECONDS = 30
 SUPPORTED_SCENARIOS = {
     "ack_lost",
     "no_commit",
@@ -62,13 +67,16 @@ def sha256_text(value: str) -> str:
 
 
 def open_db() -> sqlite3.Connection:
-    connection = sqlite3.connect(DB_PATH)
+    connection = sqlite3.connect(DB_PATH, timeout=10)
     connection.row_factory = sqlite3.Row
+    connection.execute("PRAGMA busy_timeout = 10000")
+    connection.execute("PRAGMA foreign_keys = ON")
     return connection
 
 
 def init_db() -> None:
     with open_db() as connection:
+        connection.execute("PRAGMA journal_mode = WAL")
         connection.executescript(
             """
             CREATE TABLE IF NOT EXISTS runs
@@ -147,6 +155,15 @@ def init_db() -> None:
                 verification_json TEXT NOT NULL,
                 created_at TEXT NOT NULL,
                 UNIQUE (run_id, step_no)
+            );
+
+            CREATE TABLE IF NOT EXISTS recovery_leases
+            (
+                run_id TEXT PRIMARY KEY,
+                owner_instance TEXT NOT NULL,
+                owner_token TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                created_at TEXT NOT NULL
             );
             """
         )
@@ -737,65 +754,208 @@ def verify_receipt(
         }
 
 
-def run_recovery_agent(run_id: str) -> None:
+def acquire_recovery_lease(run_id: str) -> tuple[str | None, int]:
+    """Claim one recovery worker without holding a lock during tool calls."""
+    owner_token = uuid.uuid4().hex
+    now = datetime.now(timezone.utc)
+    expires_at = now + timedelta(seconds=RECOVERY_LEASE_SECONDS)
     with open_db() as connection:
-        starting_run = get_run_row(connection, run_id)
-        if starting_run["phase"] == "VERIFIED":
-            return
-        if starting_run["phase"] not in {"INCIDENT", "BLOCKED"}:
-            raise HTTPException(
-                status_code=409, detail="This run has no recoverable incident."
-            )
+        connection.execute("BEGIN IMMEDIATE")
+        run = get_run_row(connection, run_id)
         previous_steps = connection.execute(
             "SELECT COUNT(*) AS count FROM agent_steps WHERE run_id = ?",
             (run_id,),
         ).fetchone()["count"]
-        if previous_steps:
-            return
 
-    for step_no in range(1, MAX_AGENT_STEPS + 1):
-        evidence, receipt = observe_incident(run_id, step_no)
-        diagnosis = diagnose(evidence)
-        strategy = strategy_for(diagnosis)
-        with open_db() as connection:
-            run = get_run_row(connection, run_id)
-        policy = evaluate_policy(run, evidence, diagnosis, strategy)
-
-        if not policy["authorized"]:
-            block_run(
-                run_id,
-                "AMBIGUOUS_DIAGNOSIS",
-                "AGENT_ESCALATED",
-                "Diagnosis did not meet the confidence and safety thresholds.",
+        if run["phase"] == "VERIFIED":
+            return None, previous_steps
+        if run["phase"] == "BLOCKED" and previous_steps:
+            return None, previous_steps
+        if run["phase"] not in {
+            "INCIDENT",
+            "BLOCKED",
+            "EXECUTING",
+            "RECOVERING",
+            "DIAGNOSING",
+        }:
+            raise HTTPException(
+                status_code=409, detail="This run has no recoverable incident."
             )
-            record_agent_step(
-                run_id,
-                step_no,
-                evidence,
-                diagnosis,
-                strategy,
-                policy,
-                {"status": "blocked"},
-                {"passed": False, "reason": "policy_denied"},
-            )
-            return
 
-        tool = strategy["tool"]
-        if tool == "wait_and_reobserve":
-            final = step_no == MAX_AGENT_STEPS
-            if final:
+        existing = connection.execute(
+            "SELECT * FROM recovery_leases WHERE run_id = ?", (run_id,)
+        ).fetchone()
+        if existing is not None:
+            lease_expired = datetime.fromisoformat(existing["expires_at"]) <= now
+            if not lease_expired:
+                return None, previous_steps
+            connection.execute(
+                "DELETE FROM recovery_leases WHERE run_id = ?", (run_id,)
+            )
+            add_event(
+                connection,
+                run_id,
+                "RECOVERY_LEASE_RECLAIMED",
+                "A crashed or stalled recovery worker was safely replaced.",
+            )
+
+        if run["phase"] == "EXECUTING":
+            connection.execute(
+                """
+                UPDATE runs
+                SET phase = 'INCIDENT', connection = 'LOST',
+                    effect_status = 'OUTCOME_UNKNOWN', updated_at = ?
+                WHERE id = ?
+                """,
+                (utc_now(), run_id),
+            )
+            add_event(
+                connection,
+                run_id,
+                "PROCESS_RESTART_DETECTED",
+                (
+                    "The process stopped at the provider boundary. "
+                    "Recovery will inspect authoritative evidence before acting."
+                ),
+            )
+
+        connection.execute(
+            """
+            INSERT INTO recovery_leases
+                (run_id, owner_instance, owner_token, expires_at, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                run_id,
+                PROCESS_INSTANCE_ID,
+                owner_token,
+                expires_at.isoformat(),
+                now.isoformat(),
+            ),
+        )
+        connection.execute(
+            """
+            UPDATE runs
+            SET phase = 'RECOVERING', connection = 'RECONNECTING', updated_at = ?
+            WHERE id = ?
+            """,
+            (utc_now(), run_id),
+        )
+    return owner_token, previous_steps
+
+
+def release_recovery_lease(run_id: str, owner_token: str) -> None:
+    with open_db() as connection:
+        connection.execute(
+            """
+            DELETE FROM recovery_leases
+            WHERE run_id = ? AND owner_token = ?
+            """,
+            (run_id, owner_token),
+        )
+
+
+def run_recovery_agent(run_id: str) -> None:
+    owner_token, previous_steps = acquire_recovery_lease(run_id)
+    if owner_token is None:
+        return
+
+    try:
+        for step_no in range(previous_steps + 1, MAX_AGENT_STEPS + 1):
+            evidence, receipt = observe_incident(run_id, step_no)
+            diagnosis = diagnose(evidence)
+            strategy = strategy_for(diagnosis)
+            with open_db() as connection:
+                run = get_run_row(connection, run_id)
+            policy = evaluate_policy(run, evidence, diagnosis, strategy)
+
+            if not policy["authorized"]:
                 block_run(
                     run_id,
-                    "PROVIDER_UNAVAILABLE",
+                    "AMBIGUOUS_DIAGNOSIS",
                     "AGENT_ESCALATED",
-                    "Provider remained unavailable; no mutation was attempted.",
+                    "Diagnosis did not meet the confidence and safety thresholds.",
                 )
-            else:
+                record_agent_step(
+                    run_id,
+                    step_no,
+                    evidence,
+                    diagnosis,
+                    strategy,
+                    policy,
+                    {"status": "blocked"},
+                    {"passed": False, "reason": "policy_denied"},
+                )
+                return
+
+            tool = strategy["tool"]
+            if tool == "wait_and_reobserve":
+                final = step_no == MAX_AGENT_STEPS
+                if final:
+                    block_run(
+                        run_id,
+                        "PROVIDER_UNAVAILABLE",
+                        "AGENT_ESCALATED",
+                        "Provider remained unavailable; no mutation was attempted.",
+                    )
+                else:
+                    with open_db() as connection:
+                        connection.execute(
+                            """
+                            UPDATE runs
+                            SET phase = 'INCIDENT', connection = 'LOST', updated_at = ?
+                            WHERE id = ?
+                            """,
+                            (utc_now(), run_id),
+                        )
+                        add_event(
+                            connection,
+                            run_id,
+                            "AGENT_WAITED",
+                            (
+                                "The agent waited safely and scheduled another "
+                                "observation."
+                            ),
+                        )
+                record_agent_step(
+                    run_id,
+                    step_no,
+                    evidence,
+                    diagnosis,
+                    strategy,
+                    policy,
+                    {"status": "escalated" if final else "reobserve"},
+                    {
+                        "passed": final,
+                        "safe": True,
+                        "mutation_attempted": False,
+                    },
+                )
+                if final:
+                    return
+                continue
+
+            if tool == "reconcile_receipt":
+                verification = verify_receipt(run_id, receipt)
+                record_agent_step(
+                    run_id,
+                    step_no,
+                    evidence,
+                    diagnosis,
+                    strategy,
+                    policy,
+                    {"status": "receipt_reconciled", "mutation_sent": False},
+                    verification,
+                )
+                return
+
+            if tool == "retry_same_key":
                 with open_db() as connection:
                     connection.execute(
                         """
                         UPDATE runs
-                        SET phase = 'INCIDENT', connection = 'LOST', updated_at = ?
+                        SET recovery_mutation_calls = recovery_mutation_calls + 1,
+                            updated_at = ?
                         WHERE id = ?
                         """,
                         (utc_now(), run_id),
@@ -803,60 +963,40 @@ def run_recovery_agent(run_id: str) -> None:
                     add_event(
                         connection,
                         run_id,
-                        "AGENT_WAITED",
-                        "The agent waited safely and scheduled another observation.",
+                        "SAFE_RETRY_AUTHORIZED",
+                        (
+                            "Authoritative absence allowed one retry with the "
+                            "original key."
+                        ),
                     )
-            record_agent_step(
-                run_id,
-                step_no,
-                evidence,
-                diagnosis,
-                strategy,
-                policy,
-                {"status": "escalated" if final else "reobserve"},
-                {
-                    "passed": final,
-                    "safe": True,
-                    "mutation_attempted": False,
-                },
-            )
-            if final:
-                return
-            continue
-
-        if tool == "reconcile_receipt":
-            verification = verify_receipt(run_id, receipt)
-            record_agent_step(
-                run_id,
-                step_no,
-                evidence,
-                diagnosis,
-                strategy,
-                policy,
-                {"status": "receipt_reconciled", "mutation_sent": False},
-                verification,
-            )
-            return
-
-        if tool == "retry_same_key":
-            with open_db() as connection:
-                connection.execute(
-                    """
-                    UPDATE runs
-                    SET recovery_mutation_calls = recovery_mutation_calls + 1,
-                        updated_at = ?
-                    WHERE id = ?
-                    """,
-                    (utc_now(), run_id),
-                )
-                add_event(
-                    connection,
+                retry_receipt = provider_commit(run_id)
+                verification = verify_receipt(run_id, retry_receipt)
+                record_agent_step(
                     run_id,
-                    "SAFE_RETRY_AUTHORIZED",
-                    "Authoritative absence allowed one retry with the original key.",
+                    step_no,
+                    evidence,
+                    diagnosis,
+                    strategy,
+                    policy,
+                    {
+                        "status": "same_key_retry_completed",
+                        "idempotency_key_reused": True,
+                    },
+                    verification,
                 )
-            retry_receipt = provider_commit(run_id)
-            verification = verify_receipt(run_id, retry_receipt)
+                return
+
+            status = (
+                "RECEIPT_QUARANTINED"
+                if tool == "quarantine_and_escalate"
+                else "EFFECTS_FROZEN"
+            )
+            block_run(
+                run_id,
+                status,
+                "AGENT_ESCALATED",
+                strategy["reason"],
+            )
             record_agent_step(
                 run_id,
                 step_no,
@@ -864,36 +1004,12 @@ def run_recovery_agent(run_id: str) -> None:
                 diagnosis,
                 strategy,
                 policy,
-                {
-                    "status": "same_key_retry_completed",
-                    "idempotency_key_reused": True,
-                },
-                verification,
+                {"status": "escalated", "mutation_sent": False},
+                {"passed": True, "safe": True, "requires_human": True},
             )
             return
-
-        status = (
-            "RECEIPT_QUARANTINED"
-            if tool == "quarantine_and_escalate"
-            else "EFFECTS_FROZEN"
-        )
-        block_run(
-            run_id,
-            status,
-            "AGENT_ESCALATED",
-            strategy["reason"],
-        )
-        record_agent_step(
-            run_id,
-            step_no,
-            evidence,
-            diagnosis,
-            strategy,
-            policy,
-            {"status": "escalated", "mutation_sent": False},
-            {"passed": True, "safe": True, "requires_human": True},
-        )
-        return
+    finally:
+        release_recovery_lease(run_id, owner_token)
 
 
 def build_proof(run_id: str) -> dict[str, Any]:
@@ -912,7 +1028,7 @@ def build_proof(run_id: str) -> dict[str, Any]:
     duplicate_effects = max(0, len(effect_ids) - 1)
     version_delta = order["version"] - run["order_version_before"]
     receipt = json.loads(run["receipt_json"]) if run["receipt_json"] else None
-    used_safe_retry = any(step["tool_name"] == "retry_same_key" for step in trace)
+    used_safe_retry = run["recovery_mutation_calls"] > 0
     expected_recovery_mutations = 1 if used_safe_retry else 0
     first_evidence = trace[0]["evidence"] if trace else {}
     final_step = trace[-1] if trace else {}
@@ -1057,6 +1173,7 @@ def reset_demo() -> dict[str, Any]:
     with open_db() as connection:
         connection.executescript(
             """
+            DELETE FROM recovery_leases;
             DELETE FROM agent_steps;
             DELETE FROM events;
             DELETE FROM provider_effects;
@@ -1150,21 +1267,21 @@ def create_run(request: CreateRunRequest) -> dict[str, Any]:
 @app.post("/api/runs/{run_id}/execute")
 def execute_run(run_id: str) -> JSONResponse:
     with open_db() as connection:
-        run = get_run_row(connection, run_id)
-        if run["phase"] != "READY":
+        get_run_row(connection, run_id)
+        cursor = connection.execute(
+            """
+            UPDATE runs
+            SET phase = 'EXECUTING', effect_status = 'DISPATCHED', updated_at = ?
+            WHERE id = ? AND phase = 'READY'
+            """,
+            (utc_now(), run_id),
+        )
+        if cursor.rowcount != 1:
             raise HTTPException(
                 status_code=409,
                 detail="Only a READY run can execute. Recover incidents instead.",
             )
-        scenario = run["scenario"]
-        connection.execute(
-            """
-            UPDATE runs
-            SET phase = 'EXECUTING', effect_status = 'DISPATCHED', updated_at = ?
-            WHERE id = ?
-            """,
-            (utc_now(), run_id),
-        )
+        scenario = get_run_row(connection, run_id)["scenario"]
         add_event(
             connection,
             run_id,
