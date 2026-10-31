@@ -11,7 +11,8 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
-from pydantic import BaseModel
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field, field_validator
 
 from app.diagnosis import diagnose, model_card
 from app.provider_gateway import (
@@ -47,6 +48,8 @@ SUPPORTED_SCENARIOS = {
 MIN_DIAGNOSIS_CONFIDENCE = 0.75
 MIN_DIAGNOSIS_MARGIN = 0.20
 MAX_AGENT_STEPS = 3
+MAX_ORDER_ID_LENGTH = 128
+MAX_SCHEDULED_FOR_LENGTH = 200
 
 
 app = FastAPI(
@@ -58,13 +61,27 @@ app = FastAPI(
     ),
     version="0.4.0",
 )
+app.mount("/static", StaticFiles(directory=APP_DIR / "static"), name="static")
 
 
 class CreateRunRequest(BaseModel):
     scenario: str = "ack_lost"
-    order_id: str = "731"
-    scheduled_for: str = "Friday 10:00"
+    order_id: str = Field(
+        default="731", min_length=1, max_length=MAX_ORDER_ID_LENGTH
+    )
+    scheduled_for: str = Field(
+        default="Friday 10:00",
+        min_length=1,
+        max_length=MAX_SCHEDULED_FOR_LENGTH,
+    )
     notify_supplier: bool = False
+
+    @field_validator("order_id", "scheduled_for", mode="before")
+    @classmethod
+    def strip_text_fields(cls, value: Any) -> Any:
+        if isinstance(value, str):
+            return value.strip()
+        return value
 
 
 def utc_now() -> str:

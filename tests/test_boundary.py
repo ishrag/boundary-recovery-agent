@@ -74,6 +74,27 @@ def test_dashboard_is_served() -> None:
     assert "BOUNDARY" in response.text
 
 
+def test_dashboard_exposes_judge_facing_validation_evidence() -> None:
+    response = client.get("/")
+    assert response.status_code == 200
+    page = response.text
+    assert 'id="validation"' in page
+    assert "Scenario outcome matrix" in page
+    assert "Resilience checks" in page
+    assert "Honest limitations" in page
+    assert 'fetch("/static/validation.json"' in page
+    assert "humain" not in page.lower()
+    assert "voice ai" not in page.lower()
+
+    artifact = client.get("/static/validation.json")
+    assert artifact.status_code == 200
+    report = artifact.json()
+    assert report["completed"] is True
+    assert report["status"] in {"passed", "failed"}
+    assert isinstance(report["passed"], int)
+    assert isinstance(report["failed"], int)
+
+
 def test_api_overview_remains_available_as_json() -> None:
     response = client.get("/api")
     assert response.status_code == 200

@@ -202,6 +202,208 @@
       .event { grid-template-columns: 1fr; gap: 6px; }
       footer { flex-direction: column; }
     }
+
+    /* Judge-facing narrative redesign */
+    :root {
+      --bg: #070b11;
+      --panel: #101720;
+      --panel-solid: #111a24;
+      --line: rgba(255,255,255,.10);
+      --muted: #9aa8b7;
+      --text: #f5f8fb;
+      --mint: #67edbd;
+      --cyan: #74c9ff;
+      --amber: #f5c86b;
+      --red: #ff7f91;
+      --shadow: 0 24px 70px rgba(0,0,0,.28);
+    }
+    body {
+      background:
+        radial-gradient(circle at 18% -10%, rgba(40, 202, 147, .14), transparent 34rem),
+        radial-gradient(circle at 95% 8%, rgba(70, 154, 255, .11), transparent 32rem),
+        var(--bg);
+    }
+    body::before { opacity: .10; }
+    .shell { width: min(1200px, calc(100% - 40px)); }
+    .topbar { background: rgba(7, 11, 17, .88); }
+    .nav { min-height: 68px; }
+    .nav-links { display: flex; align-items: center; gap: 22px; margin-left: auto; }
+    .nav-links a { color: var(--muted); text-decoration: none; font-size: 12px; font-weight: 750; }
+    .nav-links a:hover { color: var(--text); }
+    .nav-actions { margin-left: 8px; }
+    .hero {
+      min-height: 590px; padding: 90px 0 72px;
+      grid-template-columns: 1.08fr .92fr; align-items: center; gap: 70px;
+    }
+    h1 { max-width: 720px; font-size: clamp(46px, 6.2vw, 76px); }
+    h1 .accent { color: var(--mint); }
+    .hero-copy { max-width: 690px; font-size: 18px; }
+    .hero-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 30px; }
+    .hero-link { padding: 12px 16px; border-radius: 11px; text-decoration: none; font-size: 13px; font-weight: 850; }
+    .hero-link.primary { color: #04120d; background: var(--mint); }
+    .hero-link.secondary { color: var(--text); border: 1px solid var(--line); background: rgba(255,255,255,.03); }
+    .boundary-map {
+      padding: 22px; border: 1px solid var(--line); border-radius: 22px;
+      background: linear-gradient(150deg, rgba(20,31,41,.96), rgba(10,16,23,.96)); box-shadow: var(--shadow);
+    }
+    .map-label { margin-bottom: 14px; color: var(--muted); text-transform: uppercase; letter-spacing: .14em; font-size: 10px; font-weight: 850; }
+    .map-step { display: grid; grid-template-columns: 28px 1fr auto; align-items: center; gap: 12px; padding: 13px 0; border-bottom: 1px solid var(--line); }
+    .map-step:last-of-type { border-bottom: 0; }
+    .map-step i { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; color: #07110e; background: var(--mint); font-style: normal; font-size: 11px; font-weight: 900; }
+    .map-step b { display: block; font-size: 13px; }
+    .map-step small { display: block; margin-top: 3px; color: var(--muted); font-size: 11px; }
+    .map-state { color: var(--mint); font-size: 10px; font-weight: 900; letter-spacing: .08em; }
+    .map-step.lost i { color: #241807; background: var(--amber); }
+    .map-step.lost .map-state { color: var(--amber); }
+    .unknown-callout { margin-top: 16px; padding: 13px 14px; border-left: 3px solid var(--amber); border-radius: 8px; color: #ebd9b7; background: rgba(245,200,107,.07); font-size: 12px; line-height: 1.5; }
+    .section-block { padding: 82px 0 0; }
+    .section-head { align-items: start; margin-bottom: 27px; }
+    .section-head h2 { max-width: 650px; font-size: clamp(30px, 4vw, 48px); }
+    .section-head p { max-width: 540px; font-size: 15px; }
+    .problem-grid, .coverage-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    .story-card {
+      min-height: 210px; padding: 24px; border: 1px solid var(--line); border-radius: 20px;
+      background: rgba(255,255,255,.025);
+    }
+    .story-card .card-number { color: var(--muted); font-size: 11px; font-weight: 900; letter-spacing: .12em; }
+    .story-card h3 { margin: 28px 0 10px; font-size: 22px; }
+    .story-card p { margin: 0; color: var(--muted); line-height: 1.62; font-size: 13px; }
+    .story-card.answer { border-color: rgba(103,237,189,.35); background: rgba(103,237,189,.06); }
+    .story-card.answer .card-number, .story-card.answer h3 { color: var(--mint); }
+    .approach-panel { padding: 30px; border: 1px solid var(--line); border-radius: 24px; background: var(--panel); }
+    .approach-panel .signal-row { padding: 0; }
+    .signal { min-height: 120px; padding: 20px; background: rgba(255,255,255,.025); }
+    .signal b { display: block; margin: 0 0 10px; color: var(--text); font-size: 17px; }
+    .signal span { color: var(--muted); line-height: 1.55; }
+    .workflow-panel { padding: 28px; border: 1px solid var(--line); border-radius: 24px; background: var(--panel); }
+    .flow { margin: 0; gap: 10px; }
+    .step { min-height: 150px; padding: 18px; text-align: left; display: flex; flex-direction: column; justify-content: space-between; }
+    .step-number { color: #657282; font-size: 11px; }
+    .step b { color: #8b99a7; font-size: 17px; }
+    .step small { color: #657282; font-size: 11px; line-height: 1.45; font-weight: 600; }
+    .step.active b, .step.active small { color: var(--text); }
+    .step.done b { color: var(--mint); }
+    .workflow-note { margin: 14px 0 0; padding: 13px 15px; border-radius: 11px; color: #d8c79f; background: rgba(245,200,107,.07); font-size: 12px; line-height: 1.5; }
+    .coverage-panel { margin-top: 16px; padding: 24px; border: 1px solid var(--line); border-radius: 20px; background: rgba(255,255,255,.018); }
+    .coverage-title { display: flex; justify-content: space-between; gap: 20px; margin-bottom: 18px; }
+    .coverage-title strong { font-size: 16px; }
+    .coverage-title span { max-width: 620px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+    .coverage-grid { grid-template-columns: repeat(4, 1fr); }
+    .coverage-item { padding: 16px; border-left: 2px solid var(--cyan); background: rgba(116,201,255,.035); }
+    .coverage-item b { display: block; margin-bottom: 7px; font-size: 13px; }
+    .coverage-item p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+    .demo-section { padding-top: 92px; }
+    .grid { grid-template-columns: .72fr 1.28fr; gap: 16px; }
+    .card { border-radius: 22px; background: var(--panel); box-shadow: none; }
+    .card::after { display: none; }
+    .card-inner { padding: 28px; }
+    .advanced { margin-top: 15px; color: var(--muted); font-size: 12px; }
+    .advanced summary { cursor: pointer; color: #c7d1dc; font-weight: 750; }
+    .advanced .check { margin-bottom: 0; }
+    .reasoner { background: rgba(116,201,255,.035); }
+    .run-meta { opacity: .68; }
+    .proof-section, .trace-section, .timeline-section { padding-top: 92px; }
+    .proof-primary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .proof-primary .metric { min-height: 150px; padding: 23px; background: var(--panel); }
+    .proof-primary .metric b { margin-top: 30px; font-size: 34px; }
+    .proof-primary .metric p { margin: 8px 0 0; color: var(--muted); font-size: 11px; line-height: 1.45; }
+    .more-evidence, .technical-evidence { margin-top: 14px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255,255,255,.018); }
+    .more-evidence summary, .technical-evidence summary { padding: 15px 17px; cursor: pointer; color: #c8d3dd; font-size: 12px; font-weight: 800; }
+    .more-evidence .metrics { padding: 0 15px 15px; grid-template-columns: repeat(4, 1fr); }
+    .more-evidence .metric { min-height: 92px; }
+    .certificate { grid-template-columns: .9fr 1.1fr; background: var(--panel); }
+    .certificate-evidence { padding: 26px; }
+    .proof-sources { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .proof-source { padding: 12px; border: 1px solid var(--line); border-radius: 11px; }
+    .proof-source b { display: block; font-size: 11px; }
+    .proof-source span { display: block; margin-top: 5px; color: var(--muted); font-size: 10px; line-height: 1.4; }
+    .technical-evidence .hashes { padding: 0 15px 15px; }
+    .verdict-badge.blocked { color: #211807; background: var(--amber); border-color: var(--amber); }
+    .scenario-guidance {
+      display: flex; align-items: flex-start; gap: 10px; margin: 10px 0 0; padding: 11px 12px;
+      border: 1px solid var(--line); border-radius: 11px; color: var(--muted);
+      background: rgba(255,255,255,.02); font-size: 11px; line-height: 1.48;
+    }
+    .scenario-guidance b {
+      flex: 0 0 auto; padding: 4px 6px; border-radius: 999px; color: var(--mint);
+      border: 1px solid rgba(103,237,189,.3); font-size: 8px; letter-spacing: .08em;
+    }
+    .validation-section { padding-top: 92px; }
+    .validation-run {
+      display: grid; grid-template-columns: minmax(260px, .72fr) minmax(520px, 1.28fr);
+      gap: 24px; padding: 24px; border: 1px solid var(--line); border-radius: 20px; background: var(--panel);
+    }
+    .validation-label { color: var(--muted); font-size: 10px; font-weight: 850; letter-spacing: .13em; text-transform: uppercase; }
+    .validation-result-line { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 9px; }
+    .validation-result-line strong {
+      padding: 7px 9px; border: 1px solid var(--line); border-radius: 999px;
+      color: var(--muted); font-size: 11px; letter-spacing: .08em;
+    }
+    .validation-result-line strong.passed { color: #052117; border-color: var(--mint); background: var(--mint); }
+    .validation-result-line strong.failed { color: #28070d; border-color: var(--red); background: var(--red); }
+    .validation-result-line span { color: #c8d4df; font-size: 12px; }
+    .validation-run-copy p { margin: 10px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+    .validation-stats { display: grid; grid-template-columns: repeat(5, minmax(80px, 1fr)); gap: 8px; margin: 0; }
+    .validation-stats div { min-width: 0; padding: 13px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,.022); }
+    .validation-stats dt { color: var(--muted); font-size: 9px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
+    .validation-stats dd { margin: 8px 0 0; color: var(--text); font-size: 17px; font-weight: 800; overflow-wrap: anywhere; }
+    .validation-stats code { font-size: 11px; }
+    .validation-block { margin-top: 14px; padding: 24px; border: 1px solid var(--line); border-radius: 20px; background: rgba(255,255,255,.018); }
+    .validation-block-head { display: flex; align-items: start; justify-content: space-between; gap: 20px; margin-bottom: 18px; }
+    .validation-block h3, .validation-card h3 { margin: 7px 0 0; font-size: 19px; }
+    .expectation-key { padding: 6px 8px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 9px; font-weight: 850; letter-spacing: .08em; }
+    .validation-table-shell { overflow-x: auto; }
+    .validation-table { width: 100%; min-width: 800px; border-collapse: collapse; }
+    .validation-table th, .validation-table td { padding: 13px 12px; border-top: 1px solid var(--line); color: #c5d1dc; font-size: 11px; line-height: 1.45; text-align: left; vertical-align: top; }
+    .validation-table thead th { border-top: 0; color: var(--muted); font-size: 9px; letter-spacing: .09em; text-transform: uppercase; }
+    .validation-table tbody th { color: var(--text); font-size: 12px; }
+    .outcome { display: inline-flex; padding: 5px 7px; border-radius: 999px; font-size: 9px; font-weight: 900; letter-spacing: .07em; white-space: nowrap; }
+    .outcome.verified { color: var(--mint); border: 1px solid rgba(103,237,189,.3); background: rgba(103,237,189,.07); }
+    .outcome.blocked { color: var(--amber); border: 1px solid rgba(245,200,107,.3); background: rgba(245,200,107,.07); }
+    .validation-columns { display: grid; grid-template-columns: 1.08fr .96fr .96fr; gap: 14px; margin-top: 14px; }
+    .validation-card { padding: 22px; border: 1px solid var(--line); border-radius: 20px; background: rgba(255,255,255,.018); }
+    .limitation-card { border-color: rgba(245,200,107,.20); background: rgba(245,200,107,.025); }
+    .check-list, .lesson-list, .limitation-list { display: grid; gap: 12px; margin: 18px 0 0; padding: 0; list-style: none; }
+    .check-list li, .lesson-list li, .limitation-list li { position: relative; padding-left: 18px; color: var(--muted); font-size: 11px; line-height: 1.52; }
+    .check-list li::before, .lesson-list li::before, .limitation-list li::before { content: ""; position: absolute; left: 0; top: .52em; width: 6px; height: 6px; border-radius: 50%; background: var(--cyan); }
+    .lesson-list li::before { background: var(--mint); }
+    .limitation-list li::before { background: var(--amber); }
+    .check-list strong, .lesson-list strong { display: block; margin-bottom: 2px; color: #dce5ec; }
+    .trace-shell { overflow-x: auto; border: 1px solid var(--line); border-radius: 20px; background: var(--panel); }
+    .trace-table { width: 100%; border-collapse: collapse; min-width: 850px; }
+    .trace-table th { padding: 14px 16px; color: var(--muted); text-align: left; text-transform: uppercase; letter-spacing: .1em; font-size: 9px; }
+    .trace-table td { padding: 16px; border-top: 1px solid var(--line); color: #d7e0e8; font-size: 12px; line-height: 1.45; vertical-align: top; }
+    .trace-table td:first-child { color: var(--mint); font-weight: 900; }
+    .trace-empty { color: var(--muted) !important; text-align: center; }
+    footer { margin-top: 72px; border-top: 1px solid var(--line); }
+    .footer-link { color: var(--muted); }
+    @media (max-width: 980px) {
+      .nav-links { display: none; }
+      .hero, .grid { grid-template-columns: 1fr; }
+      .hero { min-height: auto; gap: 42px; }
+      .coverage-grid { grid-template-columns: repeat(2, 1fr); }
+      .proof-primary { grid-template-columns: 1fr 1fr 1fr; }
+      .validation-run { grid-template-columns: 1fr; }
+      .validation-columns { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 680px) {
+      .shell { width: min(100% - 24px, 1200px); }
+      .hero { padding: 60px 0 30px; }
+      h1 { font-size: 45px; }
+      .section-block, .demo-section, .proof-section, .validation-section, .trace-section, .timeline-section { padding-top: 64px; }
+      .section-head, .coverage-title { display: block; }
+      .section-head p, .coverage-title span { margin-top: 12px; }
+      .problem-grid, .coverage-grid, .proof-primary, .more-evidence .metrics { grid-template-columns: 1fr; }
+      .signal-row { grid-template-columns: 1fr; }
+      .flow { grid-template-columns: 1fr; }
+      .step { min-height: 115px; }
+      .certificate, .reasoner-grid, .reality { grid-template-columns: 1fr; }
+      .proof-sources { grid-template-columns: 1fr; }
+      .verdict { border-right: 0; border-bottom: 1px solid var(--line); }
+      .validation-stats { grid-template-columns: repeat(2, 1fr); }
+      .validation-block-head { display: block; }
+      .expectation-key { display: inline-flex; margin-top: 12px; }
+    }
   </style>
 </head>
 <body id="boundary-dashboard">
@@ -209,96 +411,170 @@
     <div class="shell nav">
       <div class="brand">
         <span class="brand-mark">B</span>
-        <span>BOUNDARY<small>RECOVERY AGENT</small></span>
+        <span>BOUNDARY<small>CRASH-SAFE AGENT RECOVERY</small></span>
       </div>
+      <nav class="nav-links" aria-label="Dashboard sections">
+        <a href="#problem">Problem</a>
+        <a href="#workflow">Workflow</a>
+        <a href="#demo">Live demo</a>
+        <a href="#proof">Proof</a>
+        <a href="#validation">Validation</a>
+      </nav>
       <div class="nav-actions">
-        <span id="healthChip" class="health"><i class="dot"></i><span>Checking API</span></span>
-        <a class="docs" href="/docs" target="_blank" rel="noreferrer">API docs ↗</a>
+        <span id="healthChip" class="health"><i class="dot"></i><span>Checking system</span></span>
       </div>
     </div>
   </header>
 
   <main class="shell">
-    <section class="hero">
+    <section id="problem" class="hero">
       <div>
-        <div class="eyebrow">HUMAIN Challenge 1 · Agentic Recovery</div>
-        <h1>Recover uncertain AI actions without replaying them.</h1>
-        <p class="hero-copy">BOUNDARY gives an interrupted AI agent a safe recovery boundary. It persists intent, reconciles with authoritative provider evidence, and resumes only when the outcome is proven.</p>
+        <div class="eyebrow">When AI actions cross system boundaries</div>
+        <h1>The action succeeded. <span class="accent">The agent never found out.</span></h1>
+        <p class="hero-copy">An AI agent can crash after an external system commits an action but before the acknowledgement is saved. Retrying may duplicate the action. Stopping may leave the workflow unfinished. BOUNDARY resolves that uncertainty before the agent acts again.</p>
+        <div class="hero-actions">
+          <a class="hero-link primary" href="#workflow">See the recovery flow</a>
+          <a class="hero-link secondary" href="#demo">Run the live proof</a>
+        </div>
       </div>
-      <div class="hero-note"><strong>One action.</strong> Even when the acknowledgement disappears.</div>
+      <div class="boundary-map" aria-label="Uncertain outcome illustration">
+        <div class="map-label">The uncertainty gap</div>
+        <div class="map-step"><i>1</i><div><b>Intent persisted</b><small>Operation identity and payload saved</small></div><span class="map-state">KNOWN</span></div>
+        <div class="map-step"><i>2</i><div><b>Provider commits</b><small>The external state is changed once</small></div><span class="map-state">DONE</span></div>
+        <div class="map-step lost"><i>3</i><div><b>Acknowledgement disappears</b><small>The connection fails before the agent saves it</small></div><span class="map-state">LOST</span></div>
+        <div class="map-step lost"><i>?</i><div><b>Agent outcome is unknown</b><small>Retry and stop are both unsafe guesses</small></div><span class="map-state">UNKNOWN</span></div>
+        <div class="unknown-callout"><strong>Unknown does not mean failed.</strong> The outcome must be reconciled with authoritative evidence.</div>
+      </div>
     </section>
 
-    <section class="signal-row" aria-label="Safety guarantees">
-      <div class="signal"><b>Persist first</b> Identity and payload are durable before dispatch.</div>
-      <div class="signal"><b>Reconcile</b> Recovery queries evidence instead of guessing.</div>
-      <div class="signal"><b>Fail closed</b> Unverified outcomes never trigger blind replay.</div>
-    </section>
-
-    <section>
+    <section class="section-block" aria-labelledby="dangerTitle">
       <div class="section-head">
-        <div><div class="eyebrow">Live recovery lab</div><h2>Make the failure visible.</h2></div>
-        <p>The demo deliberately loses the provider acknowledgement after commit, creating a dangerous unknown outcome for the agent.</p>
+        <div><div class="eyebrow">The problem</div><h2 id="dangerTitle">A timeout creates two dangerous choices.</h2></div>
+        <p>The agent cannot safely continue until it learns what the external system actually did.</p>
+      </div>
+      <div class="problem-grid">
+        <article class="story-card">
+          <span class="card-number">01 · BLIND RETRY</span>
+          <h3>Repeat the action</h3>
+          <p>If the first action already committed, a retry can create duplicate orders, notifications, payments, or workflow steps.</p>
+        </article>
+        <article class="story-card">
+          <span class="card-number">02 · BLIND STOP</span>
+          <h3>Abandon the workflow</h3>
+          <p>If the request never reached the provider, stopping leaves the requested work incomplete with no safe resolution.</p>
+        </article>
+        <article class="story-card answer">
+          <span class="card-number">03 · BOUNDARY</span>
+          <h3>Reconcile, then decide</h3>
+          <p>Preserve the original intent, inspect authoritative provider evidence, permit only the safe tool, and verify the result.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section-block" aria-labelledby="approachTitle">
+      <div class="section-head">
+        <div><div class="eyebrow">The solution</div><h2 id="approachTitle">Recover from evidence—not assumptions.</h2></div>
+        <p>BOUNDARY separates probabilistic diagnosis from deterministic permission. The model proposes what happened; the safety gate decides what the system is allowed to do.</p>
+      </div>
+      <div class="approach-panel">
+        <div class="signal-row" aria-label="Recovery principles">
+          <div class="signal"><b>Persist intent</b><span>Save the operation identity and payload before dispatch.</span></div>
+          <div class="signal"><b>Reconcile outcome</b><span>Query independent provider evidence after an interruption.</span></div>
+          <div class="signal"><b>Fail closed</b><span>Block mutations until identity, receipt, and state checks pass.</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="workflow" class="section-block" aria-labelledby="workflowTitle">
+      <div class="section-head">
+        <div><div class="eyebrow">Agent workflow</div><h2 id="workflowTitle">Five stages. One controlled decision.</h2></div>
+        <p>The recovery agent gathers evidence, diagnoses the incident, selects an allow-listed strategy, acts only through policy, and verifies the resulting state.</p>
+      </div>
+      <div class="workflow-panel">
+        <div class="flow" aria-label="Agent recovery workflow">
+          <div id="stageObserve" class="step"><span class="step-number">01</span><b>Observe</b><small>Collect durable local and provider evidence.</small></div>
+          <div id="stageDiagnose" class="step"><span class="step-number">02</span><b>Diagnose</b><small>Rank the likely incident causes.</small></div>
+          <div id="stagePlan" class="step"><span class="step-number">03</span><b>Plan</b><small>Choose an allow-listed recovery strategy.</small></div>
+          <div id="stageAct" class="step"><span class="step-number">04</span><b>Act</b><small>Execute the permitted lookup or repair.</small></div>
+          <div id="stageVerify" class="step"><span class="step-number">05</span><b>Verify</b><small>Check final state and detect duplicates.</small></div>
+        </div>
+        <p class="workflow-note"><strong>Important:</strong> “Act” does not automatically mean “retry.” For an uncertain outcome, the safest action may be a read-only reconciliation lookup.</p>
+      </div>
+      <div class="coverage-panel">
+        <div class="coverage-title">
+          <strong>How BOUNDARY handles a failing system</strong>
+          <span>The project demonstrates the full recovery loop required for a failing system: identify the incident, diagnose its cause, perform or block corrective action, and verify the outcome.</span>
+        </div>
+        <div class="coverage-grid">
+          <div class="coverage-item"><b>Identify</b><p>Detects a durable request with no trusted local outcome.</p></div>
+          <div class="coverage-item"><b>Diagnose</b><p>Classifies the incident from logs, receipts, state, and effect counts.</p></div>
+          <div class="coverage-item"><b>Correct</b><p>Selects a safe lookup, same-key retry, wait, or escalation.</p></div>
+          <div class="coverage-item"><b>Verify</b><p>Checks the receipt, final state, version, and duplicate count.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="demo" class="demo-section" aria-labelledby="demoTitle">
+      <div class="section-head">
+        <div><div class="eyebrow">Live recovery demo</div><h2 id="demoTitle">Create an uncertain outcome. Resolve it safely.</h2></div>
+        <p>Choose a simulated failure, create the incident, and watch the agent move from incomplete evidence to a verified or safely blocked decision.</p>
       </div>
 
       <div class="grid">
         <article class="card">
           <div class="card-inner">
-            <div class="card-kicker">Scenario controls</div>
-            <h3>Order reschedule</h3>
-            <p class="card-sub">Choose a real failure boundary. The agent must diagnose from evidence before it can act.</p>
+            <div class="card-kicker">1 · Create the incident</div>
+            <h3>Protected external action</h3>
+            <p class="card-sub">The demo changes one external order, introduces the selected failure, and preserves evidence for investigation.</p>
 
-            <label for="scenarioSelect">Failure scenario</label>
+            <label for="scenarioSelect">Failure condition</label>
             <select id="scenarioSelect" class="field">
-              <option value="ack_lost">ACK lost after provider commit</option>
-              <option value="no_commit">Request lost before provider commit</option>
+              <option value="ack_lost">Acknowledgement lost after commit</option>
+              <option value="no_commit">Request lost before commit</option>
               <option value="provider_unavailable">Provider unavailable during recovery</option>
-              <option value="receipt_conflict">Conflicting / tampered receipt</option>
-              <option value="compound">Compound: ACK loss plus temporary outage</option>
+              <option value="receipt_conflict">Conflicting or tampered receipt</option>
+              <option value="compound">Acknowledgement loss plus temporary outage</option>
             </select>
+            <p class="scenario-guidance"><b id="scenarioBadge">PRIMARY DEMO</b><span id="scenarioExpected">Expected: reconcile the committed receipt without replaying the mutation.</span></p>
 
-            <label>Order</label>
-            <div class="order-box"><b>#731</b><span>Current: Thursday 09:00 · v12</span></div>
+            <label>Demo record</label>
+            <div class="order-box"><b>Order #731</b><span>Thursday 09:00 · version 12</span></div>
 
-            <label for="scheduledFor">Requested schedule</label>
+            <label for="scheduledFor">Requested new schedule</label>
             <input id="scheduledFor" class="field" value="Friday 10:00" autocomplete="off">
 
-            <label class="check"><input id="notifySupplier" type="checkbox"> Notify supplier in the same protected operation</label>
+            <details class="advanced">
+              <summary>Advanced demo option</summary>
+              <label class="check"><input id="notifySupplier" type="checkbox"> Include supplier notification in the protected operation</label>
+            </details>
 
             <div class="actions">
-              <button id="runButton" class="btn btn-primary">Run selected failure</button>
+              <button id="runButton" class="btn btn-primary">Create incident</button>
               <div class="action-row">
-                <button id="recoverButton" class="btn btn-recover" disabled>Recover safely</button>
+                <button id="recoverButton" class="btn btn-recover" disabled>Let agent recover</button>
                 <button id="resetButton" class="btn btn-ghost">Reset demo</button>
               </div>
             </div>
-            <div id="notice" class="notice" aria-live="polite">Ready. The provider baseline is untouched.</div>
+            <div id="notice" class="notice" aria-live="polite">Ready. No incident has been created.</div>
           </div>
         </article>
 
         <article class="card">
           <div class="card-inner">
             <div class="state-head">
-              <div><div class="card-kicker">System state</div><h3 id="stateTitle">Ready for incident</h3></div>
+              <div><div class="card-kicker">2 · Follow the recovery agent</div><h3 id="stateTitle">Ready for incident</h3></div>
               <span id="phasePill" class="phase-pill">IDLE</span>
-            </div>
-
-            <div class="flow" aria-label="Agent reasoning flow">
-              <div id="stageObserve" class="step">01 · Observe</div>
-              <div id="stageDiagnose" class="step">02 · Diagnose</div>
-              <div id="stagePlan" class="step">03 · Plan</div>
-              <div id="stageAct" class="step">04 · Act</div>
-              <div id="stageVerify" class="step">05 · Verify</div>
             </div>
 
             <section class="reasoner" aria-labelledby="reasonerTitle">
               <div class="reasoner-head">
-                <div><small>Incident reasoner</small><strong id="reasonerTitle">Waiting for evidence</strong></div>
+                <div><small>Evidence-based decision</small><strong id="reasonerTitle">Waiting for evidence</strong></div>
                 <span id="confidenceBadge" class="confidence">—</span>
               </div>
               <div class="reasoner-grid">
                 <div class="reasoner-item">
                   <span>Diagnosis</span><b id="diagnosis">No incident observed</b>
-                  <p id="diagnosisSummary">Start a scenario to collect authoritative evidence.</p>
+                  <p id="diagnosisSummary">Create an incident to collect evidence.</p>
                 </div>
                 <div class="reasoner-item">
                   <span>Selected strategy</span><b id="strategy">—</b>
@@ -306,23 +582,23 @@
                 </div>
                 <div class="reasoner-item">
                   <span>Safety gate</span><b id="safetyGate" class="gate">WAITING</b>
-                  <p id="safetyReason">Mutation permissions have not been evaluated.</p>
+                  <p id="safetyReason">Permissions have not been evaluated.</p>
                 </div>
               </div>
               <div class="evidence-strip">
-                <span>Decisive evidence</span>
+                <span>Evidence that changed the decision</span>
                 <ul id="diagnosisEvidence"><li>Waiting for incident data</li></ul>
               </div>
             </section>
 
             <div class="reality">
               <div class="reality-box">
-                <small>Agent knowledge</small>
+                <small>What the agent knows</small>
                 <strong id="agentKnowledge">NOT STARTED</strong>
                 <p id="agentDetail">No request has been dispatched.</p>
               </div>
               <div class="reality-box">
-                <small>Provider reality</small>
+                <small>What the provider shows</small>
                 <strong id="providerReality">ORDER v12</strong>
                 <p id="providerDetail">Order 731 is scheduled for Thursday 09:00.</p>
               </div>
@@ -337,48 +613,149 @@
       </div>
     </section>
 
-    <section class="proof-section">
+    <section id="proof" class="proof-section" aria-labelledby="proofTitle">
       <div class="section-head">
-        <div><div class="eyebrow">Machine-checkable proof</div><h2>Safety, measured.</h2></div>
-        <p>The certificate is generated from the SQLite evidence trail—not from a model’s explanation.</p>
+        <div><div class="eyebrow">Verifiable outcome</div><h2 id="proofTitle">The result is checked—not narrated.</h2></div>
+        <p>The verdict is computed from persisted intent, authoritative provider state, and the recovery audit trail—not from the model’s explanation.</p>
       </div>
 
-      <div class="metrics">
-        <div class="metric"><span>Mutation requests</span><b id="metricRequests">0</b></div>
-        <div class="metric"><span>Provider commits</span><b id="metricCommits">0</b></div>
-        <div class="metric"><span>Semantic effects</span><b id="metricEffects">0</b></div>
-        <div class="metric good"><span>Duplicate effects</span><b id="metricDuplicates">0</b></div>
-        <div class="metric"><span>Version delta</span><b id="metricVersion">0</b></div>
-        <div class="metric good"><span>Recovery mutations</span><b id="metricRecovery">0</b></div>
-        <div class="metric"><span>Receipt hash match</span><b id="metricHash">—</b></div>
+      <div class="proof-primary">
+        <div class="metric good"><span>Duplicate external effects</span><b id="metricDuplicates">0</b><p>Any value above zero means the safety claim failed.</p></div>
+        <div class="metric good"><span>Writes made during recovery</span><b id="metricRecovery">0</b><p>Zero for reconciliation; one only after proven absence.</p></div>
+        <div class="metric"><span>Receipt bound to original intent</span><b id="metricHash">—</b><p>The provider receipt must match the persisted payload.</p></div>
       </div>
+
+      <details class="more-evidence">
+        <summary>View supporting measurements</summary>
+        <div class="metrics">
+          <div class="metric"><span>Provider requests</span><b id="metricRequests">0</b></div>
+          <div class="metric"><span>Provider commits</span><b id="metricCommits">0</b></div>
+          <div class="metric"><span>External effects</span><b id="metricEffects">0</b></div>
+          <div class="metric"><span>Order version change</span><b id="metricVersion">0</b></div>
+        </div>
+      </details>
 
       <div class="certificate">
         <div class="verdict">
-          <div><span id="verdictBadge" class="verdict-badge">AWAITING PROOF</span><h3 id="verdictTitle">No claim yet</h3></div>
-          <p id="verdictClaim">Run the incident, then recover it to generate an auditable safety certificate.</p>
+          <div><span id="verdictBadge" class="verdict-badge">NO VERIFIED RUN</span><h3 id="verdictTitle">Proof appears after recovery</h3></div>
+          <p id="verdictClaim">Create an incident and let the agent recover to generate a machine-checkable result.</p>
         </div>
-        <div class="hashes">
-          <div class="hash"><label>Idempotency key</label><code id="idempotencyKey">—</code></div>
-          <div class="hash"><label>Proof hash</label><code id="proofHash">—</code></div>
+        <div class="certificate-evidence">
+          <div class="proof-sources">
+            <div class="proof-source"><b>Persisted intent</b><span>Original operation identity and payload</span></div>
+            <div class="proof-source"><b>Provider state</b><span>Receipt, order version, and effect count</span></div>
+            <div class="proof-source"><b>Agent trace</b><span>Diagnosis, policy, tool, and verification</span></div>
+          </div>
+          <details class="technical-evidence">
+            <summary>View technical evidence</summary>
+            <div class="hashes">
+              <div class="hash"><label>Idempotency key</label><code id="idempotencyKey">—</code></div>
+              <div class="hash"><label>Deterministic proof fingerprint</label><code id="proofHash">—</code></div>
+            </div>
+          </details>
         </div>
       </div>
     </section>
 
-    <section class="timeline-section">
+    <section id="validation" class="validation-section" aria-labelledby="validationTitle">
       <div class="section-head">
-        <div><div class="eyebrow">Evidence trail</div><h2>What actually happened.</h2></div>
-        <p>Every state transition is written to the local evidence store and returned by the API.</p>
+        <div><div class="eyebrow">Validation &amp; limitations</div><h2 id="validationTitle">Tested failure modes. Stated limits.</h2></div>
+        <p>Expected behavior is defined before execution. The automated result below is loaded from a published test artifact—not invented by the dashboard.</p>
+      </div>
+
+      <div class="validation-run" aria-live="polite">
+        <div class="validation-run-copy">
+          <span class="validation-label">Latest published automated run</span>
+          <div class="validation-result-line"><strong id="validationStatus">NOT PUBLISHED</strong><span id="validationSource">No test artifact loaded</span></div>
+          <p id="validationMessage">Run the automated suite and publish its result before submission.</p>
+        </div>
+        <dl class="validation-stats">
+          <div><dt>Passed</dt><dd id="validationPassed">—</dd></div>
+          <div><dt>Failed</dt><dd id="validationFailed">—</dd></div>
+          <div><dt>Skipped</dt><dd id="validationSkipped">—</dd></div>
+          <div><dt>Verified at</dt><dd id="validationTime">—</dd></div>
+          <div><dt>Revision</dt><dd><code id="validationRevision">—</code></dd></div>
+        </dl>
+      </div>
+
+      <div class="validation-block">
+        <div class="validation-block-head">
+          <div><span class="validation-label">Scenario outcome matrix</span><h3>What each failure must prove</h3></div>
+          <span class="expectation-key">EXPECTED BEHAVIOR</span>
+        </div>
+        <div class="validation-table-shell">
+          <table class="validation-table">
+            <thead><tr><th scope="col">Failure condition</th><th scope="col">Expected agent decision</th><th scope="col">Verified result</th><th scope="col">Safety invariant</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Acknowledgement lost after commit</th><td>Reconcile the authoritative receipt</td><td><span class="outcome verified">VERIFIED</span></td><td>One effect; zero recovery writes</td></tr>
+              <tr><th scope="row">Request lost before commit</th><td>Retry once with the original key after proven absence</td><td><span class="outcome verified">VERIFIED</span></td><td>One final effect; one authorized recovery write</td></tr>
+              <tr><th scope="row">Provider unavailable</th><td>Wait and reobserve; never infer absence from an outage</td><td><span class="outcome blocked">SAFELY BLOCKED</span></td><td>Zero writes while the outcome is unknown</td></tr>
+              <tr><th scope="row">Conflicting receipt</th><td>Reject the evidence, quarantine, and escalate</td><td><span class="outcome blocked">SAFELY BLOCKED</span></td><td>Rejected receipt; zero unverified writes</td></tr>
+              <tr><th scope="row">Acknowledgement loss plus outage</th><td>Reobserve after the outage, then reconcile</td><td><span class="outcome verified">VERIFIED</span></td><td>One effect; no blind replay</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="validation-columns">
+        <article class="validation-card">
+          <span class="validation-label">Resilience checks</span><h3>Beyond the happy path</h3>
+          <ul class="check-list">
+            <li><strong>Concurrent recovery</strong>One lease owner acts while other workers observe the result.</li>
+            <li><strong>Concurrent execution</strong>Only one dispatch is accepted for the protected operation.</li>
+            <li><strong>Process restart</strong>Recovery is exercised before and after provider commit.</li>
+            <li><strong>HTTP process boundary</strong>A full recovery crosses the separate provider service.</li>
+            <li><strong>Idempotency-key misuse</strong>A reused key with a different payload is rejected.</li>
+          </ul>
+        </article>
+        <article class="validation-card">
+          <span class="validation-label">Lessons</span><h3>What the prototype established</h3>
+          <ul class="lesson-list">
+            <li><strong>Unknown is a third state.</strong>It is neither success nor failure and must be reconciled.</li>
+            <li><strong>Idempotency is necessary, not sufficient.</strong>The agent still needs authoritative evidence before retrying.</li>
+            <li><strong>Diagnosis and permission must be separate.</strong>The model proposes a cause; deterministic policy authorizes every write.</li>
+          </ul>
+        </article>
+        <article class="validation-card limitation-card">
+          <span class="validation-label">Honest limitations</span><h3>What this MVP does not claim</h3>
+          <ul class="limitation-list">
+            <li>The domain is a controlled order-reschedule demo with injected failures.</li>
+            <li>The local diagnosis model uses a small synthetic case set, not production incident data.</li>
+            <li>SQLite and the lease design are single-node MVP components.</li>
+            <li>Demo APIs do not yet include production authentication or tenant isolation.</li>
+            <li>The result above is the latest published run, not continuous production monitoring.</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section class="trace-section" aria-labelledby="traceTitle">
+      <div class="section-head">
+        <div><div class="eyebrow">Autonomous decision trace</div><h2 id="traceTitle">See every reasoning cycle.</h2></div>
+        <p>This trace shows how new evidence changes the diagnosis, selected tool, policy decision, and result.</p>
+      </div>
+      <div class="trace-shell">
+        <table class="trace-table">
+          <thead><tr><th>Step</th><th>Diagnosis</th><th>Strategy</th><th>Tool</th><th>Safety gate</th><th>Result</th></tr></thead>
+          <tbody id="agentTrace"><tr><td class="trace-empty" colspan="6">Run a recovery to generate the autonomous decision trace.</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="timeline-section" aria-labelledby="timelineTitle">
+      <div class="section-head">
+        <div><div class="eyebrow">Audit trail</div><h2 id="timelineTitle">Inspect what actually happened.</h2></div>
+        <p>Key recovery events are recorded in order so the incident, decision, corrective action, and verification can be audited.</p>
       </div>
       <div id="timeline" class="timeline">
-        <div class="event"><b>WAITING</b><p>Start the scenario to create the first durable event.</p></div>
+        <div class="event"><b>WAITING</b><p>Create an incident to record the first durable event.</p></div>
       </div>
     </section>
   </main>
 
   <footer class="shell">
-    <span>BOUNDARY MVP · Independent provider service · Dual evidence stores</span>
-    <span>Built for HUMAIN — Agentic Recovery of a Failing System</span>
+    <span>BOUNDARY · Crash-safe recovery for AI agents</span>
+    <span>Evidence-driven recovery · Provider boundary · <a class="footer-link" href="/docs" target="_blank" rel="noreferrer">API docs ↗</a></span>
   </footer>
 
   <script>
@@ -443,7 +820,7 @@
           text("confidenceBadge", "—");
           byId("confidenceBadge").classList.remove("high");
           text("diagnosis", snapshot ? "Evidence not analyzed yet" : "No incident observed");
-          text("diagnosisSummary", snapshot ? "Select Recover safely to start autonomous diagnosis." : "Start a scenario to collect authoritative evidence.");
+          text("diagnosisSummary", snapshot ? "Select “Let agent recover” to start autonomous diagnosis." : "Create an incident to collect authoritative evidence.");
           text("strategy", "—");
           text("strategyReason", "No recovery strategy selected.");
           text("safetyGate", snapshot ? "MUTATION BLOCKED" : "WAITING");
@@ -502,6 +879,44 @@
         });
       }
 
+      function humanize(value) {
+        return value ? String(value).replaceAll("_", " ").toLowerCase().replace(/\b\w/g, function (letter) { return letter.toUpperCase(); }) : "—";
+      }
+
+      function traceDiagnosis(value) {
+        var labels = {
+          COMMITTED_ACK_LOST: "Committed; acknowledgement lost",
+          NOT_COMMITTED_REQUEST_LOST: "Request did not commit",
+          PROVIDER_UNAVAILABLE: "Provider unavailable",
+          RECEIPT_CONFLICT_OR_TAMPERED: "Receipt integrity conflict",
+          DUPLICATE_OR_PARTIAL_EFFECT: "Duplicate or partial effect"
+        };
+        return labels[value] || humanize(value);
+      }
+
+      function renderAgentTrace(trace) {
+        var table = byId("agentTrace");
+        if (!trace || !trace.length) {
+          table.innerHTML = '<tr><td class="trace-empty" colspan="6">Let the agent recover to generate its autonomous decision trace.</td></tr>';
+          return;
+        }
+        table.innerHTML = trace.map(function (step) {
+          var diagnosis = step.diagnosis || {};
+          var policy = step.policy || {};
+          var result = step.verification && step.verification.passed
+            ? (step.verification.requires_human ? "Escalated safely" : "Verified")
+            : humanize(step.tool_result && step.tool_result.status);
+          return '<tr>' +
+            '<td>' + escapeHtml(step.step_no) + '</td>' +
+            '<td>' + escapeHtml(traceDiagnosis(diagnosis.top_hypothesis)) + '<br><small>' + escapeHtml(Math.round((diagnosis.confidence || 0) * 100) + "% confidence") + '</small></td>' +
+            '<td>' + escapeHtml(humanize(step.strategy)) + '</td>' +
+            '<td>' + escapeHtml(humanize(step.tool_name)) + '</td>' +
+            '<td>' + escapeHtml(humanize(policy.decision)) + '</td>' +
+            '<td>' + escapeHtml(result) + '</td>' +
+          '</tr>';
+        }).join("");
+      }
+
       function renderIdle(provider) {
         currentRunId = null;
         text("phasePill", "IDLE");
@@ -516,11 +931,12 @@
         text("metricHash", "—");
         text("idempotencyKey", "—");
         text("proofHash", "—");
-        text("verdictBadge", "AWAITING PROOF");
-        byId("verdictBadge").classList.remove("passed");
-        text("verdictTitle", "No claim yet");
-        text("verdictClaim", "Run the incident, then recover it to generate an auditable safety certificate.");
-        byId("timeline").innerHTML = '<div class="event"><b>WAITING</b><p>Start the scenario to create the first durable event.</p></div>';
+        text("verdictBadge", "NO VERIFIED RUN");
+        byId("verdictBadge").classList.remove("passed", "blocked");
+        text("verdictTitle", "Proof appears after recovery");
+        text("verdictClaim", "Create an incident and let the agent recover to generate a machine-checkable result.");
+        byId("timeline").innerHTML = '<div class="event"><b>WAITING</b><p>Create an incident to record the first durable event.</p></div>';
+        renderAgentTrace([]);
         elements.recover.disabled = true;
         renderReasoner(null);
       }
@@ -540,11 +956,16 @@
         text("stateTitle", run.phase === "VERIFIED" ? "Recovery verified" : run.phase === "BLOCKED" ? "Automation blocked safely" : run.phase === "INCIDENT" ? "Unknown outcome detected" : "Operation prepared");
 
         if (run.phase === "INCIDENT") {
+          var incidentMessages = {
+            ACK_LOST: "The acknowledgement is missing. The provider may already have committed the action.",
+            REQUEST_LOST: "The request may never have reached the provider. Retrying is still blocked until absence is proven.",
+            PROVIDER_TIMEOUT: "The provider outcome cannot currently be observed. The agent must wait rather than guess."
+          };
           text("agentKnowledge", "OUTCOME UNKNOWN");
-          text("agentDetail", "The receipt was lost. Replaying now could duplicate the external action.");
+          text("agentDetail", run.scenario === "receipt_conflict" ? "Provider evidence exists but fails integrity checks. Automation remains blocked." : (incidentMessages[run.effect_status] || "The external outcome is not yet trusted."));
         } else if (run.phase === "VERIFIED") {
           text("agentKnowledge", "COMMIT VERIFIED");
-          text("agentDetail", "Authoritative receipt reconciled. No mutation was replayed.");
+          text("agentDetail", run.recovery_mutation_calls ? "Authoritative absence permitted one same-key retry, followed by verification." : "The authoritative receipt was reconciled without repeating the mutation.");
         } else if (run.phase === "BLOCKED") {
           text("agentKnowledge", "SAFE ESCALATION");
           text("agentDetail", "The safety gate rejected automation. No blind mutation was sent.");
@@ -553,29 +974,43 @@
           text("agentDetail", "The request is persisted under a stable operation identity.");
         }
 
-        text("providerReality", effects.length ? "COMMITTED · v" + order.version : "ORDER v" + order.version);
-        text("providerDetail", "Order " + order.order_id + " is scheduled for " + order.scheduled_for + ".");
+        if (provider.status === "unavailable") {
+          text("providerReality", "UNAVAILABLE");
+          text("providerDetail", "Authoritative provider state cannot currently be observed. No safe conclusion is inferred from fallback data.");
+        } else {
+          text("providerReality", effects.length ? "COMMITTED · v" + order.version : "NO EFFECT · v" + order.version);
+          text("providerDetail", "Order " + order.order_id + " is scheduled for " + order.scheduled_for + ". Effects recorded for this run: " + effects.length + ".");
+        }
         text("metricRequests", run.provider_mutation_requests);
         text("metricCommits", run.provider_commits);
         text("metricEffects", proof ? proof.semantic_effect_count : effects.length);
         text("metricDuplicates", proof ? proof.duplicate_effects : Math.max(0, effects.length - 1));
-        text("metricVersion", proof ? "+" + proof.version_delta : order.version - run.order_version_before);
+        text("metricVersion", proof ? "+" + proof.version_delta : (provider.status === "unavailable" ? "UNKNOWN" : ((order.version - run.order_version_before) > 0 ? "+" : "") + (order.version - run.order_version_before)));
         text("metricRecovery", run.recovery_mutation_calls);
-        text("metricHash", proof ? (proof.receipt_payload_hash_matches ? "TRUE" : "FALSE") : "—");
+        text("metricHash", proof ? (proof.receipt_payload_hash_matches ? "MATCH" : "MISMATCH") : "—");
         text("idempotencyKey", run.idempotency_key);
         text("proofHash", proof ? proof.proof_hash : "Pending recovery");
 
         if (proof) {
           text("verdictBadge", proof.verdict);
           byId("verdictBadge").classList.toggle("passed", proof.verdict === "PASSED");
-          text("verdictTitle", proof.verdict === "PASSED" ? "Exactly-once effect proven" : "Proof checks failed");
+          byId("verdictBadge").classList.remove("blocked");
+          text("verdictTitle", proof.verdict === "PASSED" ? "One provider effect verified for this run" : "Verification checks failed");
           text("verdictClaim", proof.claim);
+        } else if (run.phase === "BLOCKED") {
+          text("verdictBadge", "SAFELY BLOCKED");
+          byId("verdictBadge").classList.remove("passed");
+          byId("verdictBadge").classList.add("blocked");
+          text("verdictTitle", "Unsafe automation was prevented");
+          text("verdictClaim", "Evidence was unavailable or unsafe, so the policy gate sent no unverified external write and required review.");
         } else {
           text("verdictBadge", run.phase === "INCIDENT" ? "INCIDENT RECORDED" : "AWAITING PROOF");
-          byId("verdictBadge").classList.remove("passed");
-          text("verdictTitle", run.phase === "INCIDENT" ? "Provider committed; agent does not know" : "No claim yet");
-          text("verdictClaim", run.phase === "INCIDENT" ? "Recovery must query the original idempotency key before any action can resume." : "The operation has not reached a recoverable incident.");
+          byId("verdictBadge").classList.remove("passed", "blocked");
+          text("verdictTitle", run.phase === "INCIDENT" ? "Outcome requires reconciliation" : "No verified result yet");
+          text("verdictClaim", run.phase === "INCIDENT" ? "The recovery agent must inspect authoritative evidence before any external mutation is allowed." : "The operation has not reached a recoverable incident.");
         }
+
+        renderAgentTrace(snapshot.agent_trace || []);
 
         var timeline = snapshot.timeline || [];
         byId("timeline").innerHTML = timeline.length ? timeline.map(function (event) {
@@ -593,12 +1028,62 @@
 
       async function refreshHealth() {
         try {
-          await request("/health");
-          elements.health.className = "health ok";
-          elements.health.innerHTML = '<i class="dot"></i><span>API healthy</span>';
+          var health = await request("/health");
+          if (health.data.provider === "unavailable") {
+            elements.health.className = "health bad";
+            elements.health.innerHTML = '<i class="dot"></i><span>Provider unavailable</span>';
+          } else {
+            elements.health.className = "health ok";
+            elements.health.innerHTML = '<i class="dot"></i><span>System ready</span>';
+          }
         } catch (error) {
           elements.health.className = "health bad";
           elements.health.innerHTML = '<i class="dot"></i><span>API unavailable</span>';
+        }
+      }
+
+      function updateScenarioGuidance() {
+        var guidance = {
+          ack_lost: ["PRIMARY DEMO", "Expected: reconcile the committed receipt without replaying the mutation."],
+          no_commit: ["VALIDATION CASE", "Expected: prove absence, then permit exactly one same-key retry."],
+          provider_unavailable: ["VALIDATION CASE", "Expected: fail closed and make no write while provider evidence is unavailable."],
+          receipt_conflict: ["VALIDATION CASE", "Expected: reject conflicting evidence, quarantine the run, and escalate."],
+          compound: ["VALIDATION CASE", "Expected: wait through the outage, reobserve, and reconcile without blind replay."]
+        };
+        var selected = guidance[elements.scenario.value] || guidance.ack_lost;
+        text("scenarioBadge", selected[0]);
+        text("scenarioExpected", selected[1]);
+      }
+
+      async function loadValidation() {
+        var status = byId("validationStatus");
+        try {
+          var response = await fetch("/static/validation.json", { cache: "no-store" });
+          if (!response.ok) throw new Error("No published validation report");
+          var report = await response.json();
+          var valid = ["passed", "failed"].indexOf(report.status) !== -1 &&
+            Number.isInteger(report.passed) && Number.isInteger(report.failed) &&
+            Number.isInteger(report.skipped) && typeof report.verified_at === "string" &&
+            typeof report.revision === "string";
+          if (!valid) throw new Error("Invalid validation report");
+
+          status.textContent = report.status === "passed" ? "SUITE PASSED" : "SUITE FAILED";
+          status.className = report.status;
+          text("validationSource", (report.command || "Automated test suite") + (report.dirty ? " · verified working tree" : ""));
+          text("validationPassed", report.passed);
+          text("validationFailed", report.failed);
+          text("validationSkipped", report.skipped);
+          text("validationTime", new Date(report.verified_at).toLocaleString());
+          text("validationRevision", report.revision.slice(0, 12));
+          text("validationMessage", report.status === "passed"
+            ? "Every test in the latest published run completed without failure."
+            : "The latest published run contains failures; inspect the suite before submission.");
+        } catch (error) {
+          status.textContent = "NOT PUBLISHED";
+          status.className = "";
+          text("validationSource", "No test artifact loaded");
+          ["validationPassed", "validationFailed", "validationSkipped", "validationTime", "validationRevision"].forEach(function (id) { text(id, "—"); });
+          text("validationMessage", "Run the automated suite and publish its result before submission.");
         }
       }
 
@@ -672,7 +1157,10 @@
       elements.run.addEventListener("click", runScenario);
       elements.recover.addEventListener("click", recoverScenario);
       elements.reset.addEventListener("click", resetScenario);
+      elements.scenario.addEventListener("change", updateScenarioGuidance);
       renderIdle({ order_id: "731", scheduled_for: "Thursday 09:00", version: 12 });
+      updateScenarioGuidance();
+      loadValidation();
       refreshHealth();
     }());
   </script>
