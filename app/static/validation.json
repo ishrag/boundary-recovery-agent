@@ -1,12 +1,12 @@
 {
   "command": "pytest -q -p no:cacheprovider",
   "completed": true,
-  "dirty": true,
+  "dirty": false,
   "failed": 0,
-  "generated_at": "2026-10-31T12:03:40.179415+00:00",
+  "generated_at": "2026-10-31T12:05:15.740207+00:00",
   "git": {
-    "dirty": true,
-    "revision": "fdd279506c9db675d49c3e235502672adaf675b3"
+    "dirty": false,
+    "revision": "0e1f53dfe26c2fd0302cd04e868955d0ccf6f19e"
   },
   "passed": 30,
   "pytest": {
@@ -24,9 +24,9 @@
     "outcome": "passed",
     "version": "9.2.0"
   },
-  "revision": "fdd279506c9db675d49c3e235502672adaf675b3",
+  "revision": "0e1f53dfe26c2fd0302cd04e868955d0ccf6f19e",
   "schema_version": 1,
   "skipped": 0,
   "status": "passed",
-  "verified_at": "2026-10-31T12:03:40.179415+00:00"
+  "verified_at": "2026-10-31T12:05:15.740207+00:00"
 }
