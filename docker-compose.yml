@@ -1,0 +1,78 @@
+name: boundary
+
+services:
+  provider:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: boundary-recovery-agent:demo
+    command:
+      - uvicorn
+      - provider_service.main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8001"
+      - --workers
+      - "1"
+    environment:
+      BOUNDARY_PROVIDER_DB_PATH: /data/provider.db
+    volumes:
+      - provider-data:/data
+    expose:
+      - "8001"
+    init: true
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,noexec,nosuid
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=2)
+      interval: 10s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
+
+  boundary:
+    image: boundary-recovery-agent:demo
+    depends_on:
+      provider:
+        condition: service_healthy
+    environment:
+      BOUNDARY_DB_PATH: /data/boundary.db
+      BOUNDARY_PROVIDER_URL: http://provider:8001
+    volumes:
+      - boundary-data:/data
+    ports:
+      - "${BOUNDARY_BIND:-127.0.0.1}:${BOUNDARY_PORT:-8000}:8000"
+    init: true
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,noexec,nosuid
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=2)
+      interval: 10s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
+
+volumes:
+  boundary-data:
+  provider-data:

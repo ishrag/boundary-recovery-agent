@@ -1,4 +1,4 @@
-from fastapi.testclient import TestClient
+from starlette.testclient import TestClient
 
 from app.diagnosis import FEATURES, diagnose
 from app.main import app

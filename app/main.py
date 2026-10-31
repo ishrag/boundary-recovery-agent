@@ -14,6 +14,20 @@ from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
 from app.diagnosis import diagnose, model_card
+from app.provider_gateway import (
+    ProviderConflict,
+    ProviderNotFound,
+    ProviderUnavailable,
+    commit_provider_operation,
+    configure_provider_fault,
+    get_provider_order as fetch_provider_order,
+    list_provider_effects,
+    lookup_provider_receipt,
+    provider_health,
+    provider_mode,
+    reset_provider,
+)
+from provider_service.store import PROVIDER_SOURCE
 
 
 APP_DIR = Path(__file__).resolve().parent
@@ -21,7 +35,6 @@ DB_PATH = Path(
     os.getenv("BOUNDARY_DB_PATH", str(APP_DIR.parent / "boundary.db"))
 )
 DASHBOARD_PATH = APP_DIR / "static" / "index.html"
-PROVIDER_SOURCE = "mock-order-service"
 PROCESS_INSTANCE_ID = uuid.uuid4().hex
 RECOVERY_LEASE_SECONDS = 30
 SUPPORTED_SCENARIOS = {
@@ -43,7 +56,7 @@ app = FastAPI(
         "actions, selects a safe strategy, acts through allow-listed tools, "
         "and verifies the result."
     ),
-    version="0.3.0",
+    version="0.4.0",
 )
 
 
@@ -104,34 +117,6 @@ def init_db() -> None:
                 updated_at TEXT NOT NULL
             );
 
-            CREATE TABLE IF NOT EXISTS provider_orders
-            (
-                order_id TEXT PRIMARY KEY,
-                scheduled_for TEXT NOT NULL,
-                supplier_notified INTEGER NOT NULL,
-                version INTEGER NOT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS provider_operations
-            (
-                idempotency_key TEXT PRIMARY KEY,
-                run_id TEXT NOT NULL,
-                operation_id TEXT NOT NULL,
-                payload_hash TEXT NOT NULL,
-                receipt_json TEXT NOT NULL,
-                created_at TEXT NOT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS provider_effects
-            (
-                effect_id TEXT PRIMARY KEY,
-                run_id TEXT NOT NULL,
-                idempotency_key TEXT NOT NULL UNIQUE,
-                semantic_signature TEXT NOT NULL,
-                order_id TEXT NOT NULL,
-                scheduled_for TEXT NOT NULL
-            );
-
             CREATE TABLE IF NOT EXISTS events
             (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -166,14 +151,6 @@ def init_db() -> None:
                 created_at TEXT NOT NULL
             );
             """
-        )
-        connection.execute(
-            """
-            INSERT OR IGNORE INTO provider_orders
-                (order_id, scheduled_for, supplier_notified, version)
-            VALUES (?, ?, ?, ?)
-            """,
-            ("731", "Thursday 09:00", 0, 12),
         )
 
 
@@ -216,26 +193,15 @@ def serialize_run(row: sqlite3.Row) -> dict[str, Any]:
 def provider_order(
     connection: sqlite3.Connection, order_id: str
 ) -> dict[str, Any]:
-    row = connection.execute(
-        "SELECT * FROM provider_orders WHERE order_id = ?", (order_id,)
-    ).fetchone()
-    if row is None:
-        raise HTTPException(status_code=404, detail="Provider order not found")
-    result = dict(row)
-    result["supplier_notified"] = bool(result["supplier_notified"])
-    return result
-
-
-def semantic_signature(order_id: str, scheduled_for: str) -> str:
-    return sha256_text(
-        canonical_json(
-            {
-                "action": "reschedule_order",
-                "order_id": order_id,
-                "scheduled_for": scheduled_for,
-            }
-        )
-    )
+    del connection
+    try:
+        return fetch_provider_order(order_id)
+    except ProviderNotFound as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except ProviderUnavailable as error:
+        raise HTTPException(
+            status_code=503, detail="Provider order service is unavailable"
+        ) from error
 
 
 def provider_commit(run_id: str) -> dict[str, Any]:
@@ -250,103 +216,54 @@ def provider_commit(run_id: str) -> dict[str, Any]:
             """,
             (utc_now(), run_id),
         )
-
-        existing = connection.execute(
-            """
-            SELECT * FROM provider_operations WHERE idempotency_key = ?
-            """,
-            (run["idempotency_key"],),
-        ).fetchone()
-        if existing is not None:
-            if (
-                existing["operation_id"] != run["operation_id"]
-                or existing["payload_hash"] != run["payload_hash"]
-            ):
-                raise HTTPException(
-                    status_code=409,
-                    detail="Idempotency key was reused with different work",
-                )
-            return json.loads(existing["receipt_json"])
-
-        order = provider_order(connection, run["order_id"])
-        next_version = order["version"] + 1
-        effect_id = f"FX-{run_id.upper()}"
-        receipt = {
-            "outcome": "committed",
-            "provider_source": PROVIDER_SOURCE,
+        provider_request = {
+            "run_id": run_id,
             "operation_id": run["operation_id"],
             "idempotency_key": run["idempotency_key"],
             "payload_hash": run["payload_hash"],
             "order_id": run["order_id"],
             "scheduled_for": run["scheduled_for"],
-            "supplier_notified": bool(run["notify_supplier"]),
-            "order_version": next_version,
-            "effect_id": effect_id,
+            "notify_supplier": bool(run["notify_supplier"]),
         }
-        connection.execute(
-            """
-            UPDATE provider_orders
-            SET scheduled_for = ?, supplier_notified = ?, version = ?
-            WHERE order_id = ?
-            """,
-            (
-                run["scheduled_for"],
-                run["notify_supplier"],
-                next_version,
-                run["order_id"],
-            ),
-        )
-        connection.execute(
-            """
-            INSERT INTO provider_effects
-                (effect_id, run_id, idempotency_key, semantic_signature,
-                 order_id, scheduled_for)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (
-                effect_id,
-                run_id,
-                run["idempotency_key"],
-                semantic_signature(run["order_id"], run["scheduled_for"]),
-                run["order_id"],
-                run["scheduled_for"],
-            ),
-        )
-        connection.execute(
-            """
-            INSERT INTO provider_operations
-                (idempotency_key, run_id, operation_id, payload_hash,
-                 receipt_json, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (
-                run["idempotency_key"],
-                run_id,
-                run["operation_id"],
-                run["payload_hash"],
-                canonical_json(receipt),
-                utc_now(),
-            ),
-        )
+
+    try:
+        result = commit_provider_operation(provider_request)
+    except ProviderConflict as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    except ProviderNotFound as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except ProviderUnavailable as error:
+        raise HTTPException(
+            status_code=503, detail="Provider mutation outcome is unknown"
+        ) from error
+
+    receipt = result["receipt"]
+    with open_db() as connection:
+        run = get_run_row(connection, run_id)
         connection.execute(
             """
             UPDATE runs
-            SET provider_commits = provider_commits + 1,
+            SET provider_commits = CASE
+                    WHEN provider_commits < 1 THEN 1
+                    ELSE provider_commits
+                END,
                 order_version_after = ?, updated_at = ?
             WHERE id = ?
             """,
-            (next_version, utc_now(), run_id),
+            (receipt["order_version"], utc_now(), run_id),
         )
-        add_event(
-            connection,
-            run_id,
-            "PROVIDER_COMMITTED",
-            (
-                f"Provider changed order {run['order_id']} to "
-                f"{run['scheduled_for']} at version {next_version}."
-            ),
-        )
-        return receipt
+        if result["created"]:
+            add_event(
+                connection,
+                run_id,
+                "PROVIDER_COMMITTED",
+                (
+                    f"Independent provider changed order {run['order_id']} to "
+                    f"{run['scheduled_for']} at version "
+                    f"{receipt['order_version']}."
+                ),
+            )
+    return receipt
 
 
 def expected_receipt(run: sqlite3.Row) -> dict[str, Any]:
@@ -398,105 +315,135 @@ def transport_signal(effect_status: str) -> str:
     return mapping.get(effect_status, "none")
 
 
-def provider_is_reachable(run: sqlite3.Row, step_no: int) -> bool:
-    if run["scenario"] == "provider_unavailable":
-        return False
-    if run["scenario"] == "compound" and step_no < 3:
-        return False
-    return True
-
-
 def observe_incident(
     run_id: str, step_no: int
 ) -> tuple[dict[str, Any], dict[str, Any] | None]:
     with open_db() as connection:
         run = get_run_row(connection, run_id)
-        reachable = provider_is_reachable(run, step_no)
         connection.execute(
             """
             UPDATE runs
             SET phase = 'DIAGNOSING',
-                connection = ?,
+                connection = 'RECONNECTING',
                 recovery_lookup_calls = recovery_lookup_calls + 1,
                 updated_at = ?
             WHERE id = ?
             """,
-            ("RECONNECTING" if reachable else "UNAVAILABLE", utc_now(), run_id),
+            (utc_now(), run_id),
+        )
+
+    base: dict[str, Any] = {
+        "request_persisted": "yes",
+        "local_receipt_present": "yes" if run["receipt_json"] else "no",
+        "provider_reachable": "unknown",
+        "provider_operation": "unknown",
+        "receipt_integrity": "unknown",
+        "effect_count": "unknown",
+        "version_delta": "unknown",
+        "state_matches_intent": "unknown",
+        "transport_signal": transport_signal(run["effect_status"]),
+        "lookup_error": "none",
+        "effect_ids": [],
+        "provider_mutation_requests": run["provider_mutation_requests"],
+        "provider_commits": run["provider_commits"],
+        "recovery_mutation_calls": run["recovery_mutation_calls"],
+    }
+
+    try:
+        receipt = lookup_provider_receipt(run["idempotency_key"])
+        order = fetch_provider_order(run["order_id"])
+        effects = list_provider_effects(run_id)
+    except (ProviderUnavailable, ProviderNotFound):
+        base.update(
+            {
+                "provider_reachable": "no",
+                "lookup_error": "unavailable",
+            }
+        )
+        with open_db() as connection:
+            connection.execute(
+                """
+                UPDATE runs
+                SET connection = 'UNAVAILABLE', updated_at = ?
+                WHERE id = ?
+                """,
+                (utc_now(), run_id),
+            )
+            add_event(
+                connection,
+                run_id,
+                "AGENT_OBSERVED",
+                (
+                    f"Step {step_no}: the independent provider could not "
+                    "return authoritative evidence."
+                ),
+            )
+        return base, None
+
+    effect_ids = [effect["effect_id"] for effect in effects]
+    version_delta = order["version"] - run["order_version_before"]
+    state_matches = (
+        order["scheduled_for"] == run["scheduled_for"]
+        and bool(order["supplier_notified"])
+        == bool(run["notify_supplier"])
+    )
+    if receipt is not None:
+        mismatches = receipt_mismatches(run, receipt)
+        integrity = "mismatch" if mismatches else "match"
+    else:
+        integrity = "unknown"
+
+    authoritative_commits = 1 if effect_ids else run["provider_commits"]
+    with open_db() as connection:
+        connection.execute(
+            """
+            UPDATE runs
+            SET connection = 'RECONNECTING',
+                provider_commits = CASE
+                    WHEN provider_commits < ? THEN ? ELSE provider_commits
+                END,
+                order_version_after = CASE
+                    WHEN ? > 0 THEN ? ELSE order_version_after
+                END,
+                updated_at = ?
+            WHERE id = ?
+            """,
+            (
+                authoritative_commits,
+                authoritative_commits,
+                len(effect_ids),
+                order["version"],
+                utc_now(),
+                run_id,
+            ),
         )
         add_event(
             connection,
             run_id,
             "AGENT_OBSERVED",
             (
-                f"Step {step_no}: collected durable evidence; provider "
-                + ("reachable." if reachable else "unavailable.")
+                f"Step {step_no}: collected evidence across the independent "
+                "provider service boundary."
             ),
         )
 
-        base: dict[str, Any] = {
-            "request_persisted": "yes",
-            "local_receipt_present": "yes" if run["receipt_json"] else "no",
-            "provider_reachable": "yes" if reachable else "no",
-            "provider_operation": "unknown",
-            "receipt_integrity": "unknown",
-            "effect_count": "unknown",
-            "version_delta": "unknown",
-            "state_matches_intent": "unknown",
-            "transport_signal": transport_signal(run["effect_status"]),
-            "lookup_error": "none" if reachable else "unavailable",
-            "effect_ids": [],
-            "provider_mutation_requests": run["provider_mutation_requests"],
-            "provider_commits": run["provider_commits"],
-            "recovery_mutation_calls": run["recovery_mutation_calls"],
+    base.update(
+        {
+            "provider_reachable": "yes",
+            "provider_operation": "present" if receipt else "absent",
+            "receipt_integrity": integrity,
+            "effect_count": count_bucket(len(effect_ids)),
+            "version_delta": delta_bucket(version_delta),
+            "state_matches_intent": "yes" if state_matches else "no",
+            "lookup_error": (
+                "integrity_conflict" if integrity == "mismatch" else "none"
+            ),
+            "effect_ids": effect_ids,
+            "provider_order_version": order["version"],
+            "provider_commits": authoritative_commits,
         }
-        if not reachable:
-            return base, None
-
-        operation = connection.execute(
-            """
-            SELECT * FROM provider_operations WHERE idempotency_key = ?
-            """,
-            (run["idempotency_key"],),
-        ).fetchone()
-        order = provider_order(connection, run["order_id"])
-        effects = connection.execute(
-            """
-            SELECT effect_id FROM provider_effects
-            WHERE run_id = ? ORDER BY effect_id
-            """,
-            (run_id,),
-        ).fetchall()
-        effect_ids = [row["effect_id"] for row in effects]
-        version_delta = order["version"] - run["order_version_before"]
-        state_matches = (
-            order["scheduled_for"] == run["scheduled_for"]
-            and bool(order["supplier_notified"])
-            == bool(run["notify_supplier"])
-        )
-
-        receipt: dict[str, Any] | None = None
-        if operation is not None:
-            receipt = json.loads(operation["receipt_json"])
-            mismatches = receipt_mismatches(run, receipt)
-            integrity = "mismatch" if mismatches else "match"
-        else:
-            integrity = "unknown"
-
-        base.update(
-            {
-                "provider_operation": "present" if operation else "absent",
-                "receipt_integrity": integrity,
-                "effect_count": count_bucket(len(effect_ids)),
-                "version_delta": delta_bucket(version_delta),
-                "state_matches_intent": "yes" if state_matches else "no",
-                "lookup_error": (
-                    "integrity_conflict" if integrity == "mismatch" else "none"
-                ),
-                "effect_ids": effect_ids,
-                "provider_order_version": order["version"],
-            }
-        )
-        return base, receipt
+    )
+    return base, receipt
 
 
 def strategy_for(diagnosis: dict[str, Any]) -> dict[str, str]:
@@ -695,24 +642,30 @@ def verify_receipt(
 
     with open_db() as connection:
         run = get_run_row(connection, run_id)
-        mismatches = receipt_mismatches(run, receipt)
-        order = provider_order(connection, run["order_id"])
-        effect = connection.execute(
-            """
-            SELECT effect_id FROM provider_effects
-            WHERE run_id = ? AND effect_id = ?
-            """,
-            (run_id, receipt.get("effect_id")),
-        ).fetchone()
-        if order["version"] != receipt.get("order_version"):
-            mismatches.append("order_version")
-        if order["scheduled_for"] != run["scheduled_for"]:
-            mismatches.append("provider_state")
-        if bool(order["supplier_notified"]) != bool(run["notify_supplier"]):
-            mismatches.append("supplier_notification")
-        if effect is None:
-            mismatches.append("effect_id")
+    try:
+        order = fetch_provider_order(run["order_id"])
+        effects = list_provider_effects(run_id)
+    except (ProviderUnavailable, ProviderNotFound):
+        block_run(
+            run_id,
+            "VERIFICATION_UNAVAILABLE",
+            "VERIFICATION_BLOCKED",
+            "The provider became unavailable during verification.",
+        )
+        return {"passed": False, "reason": "provider_unavailable"}
 
+    mismatches = receipt_mismatches(run, receipt)
+    effect_ids = {effect["effect_id"] for effect in effects}
+    if order["version"] != receipt.get("order_version"):
+        mismatches.append("order_version")
+    if order["scheduled_for"] != run["scheduled_for"]:
+        mismatches.append("provider_state")
+    if bool(order["supplier_notified"]) != bool(run["notify_supplier"]):
+        mismatches.append("supplier_notification")
+    if receipt.get("effect_id") not in effect_ids:
+        mismatches.append("effect_id")
+
+    with open_db() as connection:
         if mismatches:
             connection.execute(
                 """
@@ -1015,14 +968,20 @@ def run_recovery_agent(run_id: str) -> None:
 def build_proof(run_id: str) -> dict[str, Any]:
     with open_db() as connection:
         run = get_run_row(connection, run_id)
-        order = provider_order(connection, run["order_id"])
-        effects = connection.execute(
-            """
-            SELECT effect_id FROM provider_effects
-            WHERE run_id = ? ORDER BY effect_id
-            """,
-            (run_id,),
-        ).fetchall()
+    provider_available = True
+    try:
+        order = fetch_provider_order(run["order_id"])
+        effects = list_provider_effects(run_id)
+    except (ProviderUnavailable, ProviderNotFound):
+        provider_available = False
+        order = {
+            "order_id": run["order_id"],
+            "scheduled_for": run["scheduled_for"],
+            "supplier_notified": bool(run["notify_supplier"]),
+            "version": run["order_version_after"]
+            or run["order_version_before"],
+        }
+        effects = []
     trace = load_agent_trace(run_id)
     effect_ids = [row["effect_id"] for row in effects]
     duplicate_effects = max(0, len(effect_ids) - 1)
@@ -1035,6 +994,7 @@ def build_proof(run_id: str) -> dict[str, Any]:
 
     passed = all(
         [
+            provider_available,
             run["phase"] == "VERIFIED",
             run["provider_mutation_requests"] == 1,
             run["provider_commits"] == 1,
@@ -1082,6 +1042,7 @@ def build_proof(run_id: str) -> dict[str, Any]:
             "provider_mutation_requests"
         ],
         "provider_commits": run["provider_commits"],
+        "provider_available_during_proof": provider_available,
         "semantic_effect_count": len(effect_ids),
         "duplicate_effects": duplicate_effects,
         "order_version_before_action": run["order_version_before"],
@@ -1103,17 +1064,6 @@ def build_proof(run_id: str) -> dict[str, Any]:
 def snapshot(run_id: str) -> dict[str, Any]:
     with open_db() as connection:
         run = get_run_row(connection, run_id)
-        order = provider_order(connection, run["order_id"])
-        effects = [
-            dict(row)
-            for row in connection.execute(
-                """
-                SELECT effect_id, idempotency_key, order_id, scheduled_for
-                FROM provider_effects WHERE run_id = ? ORDER BY effect_id
-                """,
-                (run_id,),
-            ).fetchall()
-        ]
         timeline = [
             dict(row)
             for row in connection.execute(
@@ -1124,10 +1074,29 @@ def snapshot(run_id: str) -> dict[str, Any]:
                 (run_id,),
             ).fetchall()
         ]
+    provider_status = "available"
+    try:
+        order = fetch_provider_order(run["order_id"])
+        effects = list_provider_effects(run_id)
+    except (ProviderUnavailable, ProviderNotFound):
+        provider_status = "unavailable"
+        order = {
+            "order_id": run["order_id"],
+            "scheduled_for": run["scheduled_for"],
+            "supplier_notified": bool(run["notify_supplier"]),
+            "version": run["order_version_after"]
+            or run["order_version_before"],
+        }
+        effects = []
     trace = load_agent_trace(run_id)
     return {
         "run": serialize_run(run),
-        "provider": {"order": order, "effects": effects},
+        "provider": {
+            "status": provider_status,
+            "mode": provider_mode(),
+            "order": order,
+            "effects": effects,
+        },
         "timeline": timeline,
         "agent_trace": trace,
         "latest_reasoning": trace[-1] if trace else None,
@@ -1151,6 +1120,7 @@ def project_overview() -> dict[str, Any]:
             "strategy, acts through an allow-listed tool, and verifies recovery."
         ),
         "scenarios": sorted(SUPPORTED_SCENARIOS),
+        "provider_boundary": provider_mode(),
         "model": "/api/model",
         "docs": "/docs",
     }
@@ -1164,39 +1134,62 @@ def get_model_card() -> dict[str, Any]:
 
 
 @app.get("/health")
-def health_check() -> dict[str, str]:
-    return {"status": "healthy", "service": "boundary-recovery-agent"}
+def health_check() -> dict[str, Any]:
+    provider_status = "healthy"
+    try:
+        provider_health()
+    except ProviderUnavailable:
+        provider_status = "unavailable"
+    return {
+        "status": "healthy",
+        "service": "boundary-recovery-agent",
+        "provider": provider_status,
+        "provider_mode": provider_mode(),
+    }
+
+
+@app.get("/ready")
+def readiness_check() -> dict[str, Any]:
+    try:
+        provider = provider_health()
+    except ProviderUnavailable as error:
+        raise HTTPException(
+            status_code=503,
+            detail="The independent provider service is unavailable",
+        ) from error
+    return {"status": "ready", "provider": provider}
 
 
 @app.post("/api/demo/reset")
 def reset_demo() -> dict[str, Any]:
+    try:
+        provider_result = reset_provider()
+    except ProviderUnavailable as error:
+        raise HTTPException(
+            status_code=503,
+            detail="Provider reset failed; local evidence was preserved",
+        ) from error
     with open_db() as connection:
         connection.executescript(
             """
             DELETE FROM recovery_leases;
             DELETE FROM agent_steps;
             DELETE FROM events;
-            DELETE FROM provider_effects;
-            DELETE FROM provider_operations;
             DELETE FROM runs;
-            DELETE FROM provider_orders;
             """
         )
-        connection.execute(
-            """
-            INSERT INTO provider_orders
-                (order_id, scheduled_for, supplier_notified, version)
-            VALUES (?, ?, ?, ?)
-            """,
-            ("731", "Thursday 09:00", 0, 12),
-        )
+    provider_order_state = provider_result.get("order", {})
     return {
         "status": "reset",
         "provider_order": {
-            "order_id": "731",
-            "scheduled_for": "Thursday 09:00",
-            "supplier_notified": False,
-            "version": 12,
+            "order_id": provider_order_state.get("order_id", "731"),
+            "scheduled_for": provider_order_state.get(
+                "scheduled_for", "Thursday 09:00"
+            ),
+            "supplier_notified": bool(
+                provider_order_state.get("supplier_notified", False)
+            ),
+            "version": provider_order_state.get("version", 12),
         },
     }
 
@@ -1293,30 +1286,29 @@ def execute_run(run_id: str) -> JSONResponse:
     if committed:
         provider_commit(run_id)
 
-    if scenario == "receipt_conflict":
+    with open_db() as connection:
+        run = get_run_row(connection, run_id)
+        idempotency_key = run["idempotency_key"]
+
+    if scenario == "provider_unavailable":
+        configure_provider_fault(
+            idempotency_key, lookup_failures_remaining=-1
+        )
+    elif scenario == "compound":
+        configure_provider_fault(
+            idempotency_key, lookup_failures_remaining=2
+        )
+    elif scenario == "receipt_conflict":
+        configure_provider_fault(idempotency_key, tamper_receipt=True)
         with open_db() as connection:
-            run = get_run_row(connection, run_id)
-            row = connection.execute(
-                """
-                SELECT receipt_json FROM provider_operations
-                WHERE idempotency_key = ?
-                """,
-                (run["idempotency_key"],),
-            ).fetchone()
-            receipt = json.loads(row["receipt_json"])
-            receipt["payload_hash"] = "tampered-" + receipt["payload_hash"][:12]
-            connection.execute(
-                """
-                UPDATE provider_operations SET receipt_json = ?
-                WHERE idempotency_key = ?
-                """,
-                (canonical_json(receipt), run["idempotency_key"]),
-            )
             add_event(
                 connection,
                 run_id,
                 "RECEIPT_TAMPERED",
-                "Fault injector altered the provider receipt hash.",
+                (
+                    "The provider boundary fault injector will return a "
+                    "conflicting receipt hash."
+                ),
             )
 
     status_by_scenario = {
@@ -1393,20 +1385,20 @@ def get_proof(run_id: str) -> dict[str, Any]:
 
 @app.get("/api/provider/orders/{order_id}")
 def get_provider_order(order_id: str) -> dict[str, Any]:
-    with open_db() as connection:
-        return provider_order(connection, order_id)
+    try:
+        return fetch_provider_order(order_id)
+    except ProviderNotFound as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except ProviderUnavailable as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
 
 
 @app.get("/api/provider/receipts/{idempotency_key}")
 def get_provider_receipt(idempotency_key: str) -> dict[str, Any]:
-    with open_db() as connection:
-        row = connection.execute(
-            """
-            SELECT receipt_json FROM provider_operations
-            WHERE idempotency_key = ?
-            """,
-            (idempotency_key,),
-        ).fetchone()
-    if row is None:
+    try:
+        receipt = lookup_provider_receipt(idempotency_key)
+    except ProviderUnavailable as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    if receipt is None:
         raise HTTPException(status_code=404, detail="Provider receipt not found")
-    return json.loads(row["receipt_json"])
+    return receipt
